@@ -3,11 +3,19 @@ import logging
 import signal
 import time
 
-from common import middleware, message_protocol
+from common import middleware, message_protocol, transaction_id
+from graph.graph_class import DirectedGraph
 
+# Environment variables
 MOM_HOST = os.environ["MOM_HOST"]
 INPUT_QUEUE = os.environ["INPUT_QUEUE"]
 OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
+
+# Constants
+TRANSACTION_ORIGIN_BANK_POS = 0
+TRANSACTION_ORIGIN_ACC_POS = 1
+TRANSACTION_DESTINATION_BANK_POS = 2
+TRANSACTION_DESTINATION_ACC_POS = 3
 
 class TransactionsGraphAgg:
 
@@ -21,6 +29,9 @@ class TransactionsGraphAgg:
         self.output_queue = middleware.MessageMiddlewareQueueRabbitMQ(
             MOM_HOST, OUTPUT_QUEUE,
         )
+
+        # Create graph
+        self.graph = DirectedGraph()
 
         # Assign sigterm handler
         signal.signal(signalnum=signal.SIGTERM, handler=self._sigterm_handler)
@@ -50,12 +61,36 @@ class TransactionsGraphAgg:
                 current_retries += 1
 
     # Process data message
-    def _process_data_batch(self):
-        pass
+    def _process_data_batch(self, transactions_batch):
+        # For each transaction on the batch
+        for transaction in transactions_batch:
+            # Get origin account
+            origin = transaction_id.TransactionID(
+                        transaction[TRANSACTION_ORIGIN_BANK_POS],
+                        transaction[TRANSACTION_ORIGIN_ACC_POS]
+                        )
+            
+            # Get destination account
+            destination = transaction_id.TransactionID(
+                        transaction[TRANSACTION_DESTINATION_BANK_POS],
+                        transaction[TRANSACTION_DESTINATION_ACC_POS]
+                        )
+
+            # Add nodes and edge
+            self.graph.add_node(origin)
+            self.graph.add_node(destination)
+            self.graph.add_edge(origin, destination)
+
 
     # Process EOF
     def _process_eof(self):
-        pass
+        # For each node
+        for origin in self.graph.get_nodes():
+
+            # For each neighbour
+            for destination in self.graph.get_neighbors(origin):
+                message = message_protocol.internal.serialize([origin.as_tuple(), destination.as_tuple()])
+                self.output_queue.send(message)
 
     # Process message that arrived
     def process_message(self, message, ack, nack):
