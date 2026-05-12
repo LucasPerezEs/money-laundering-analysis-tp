@@ -24,7 +24,7 @@ class UniquePathsCounter(WorkerBase):
         self.intermediate_nodes = {}
 
     # Process data message
-    def _process_data_batch(self, transactions_batch):
+    def process(self, transactions_batch):
         logging.info("Batch de datos recibido")
         # For each transaction
         for transaction in transactions_batch:
@@ -52,41 +52,14 @@ class UniquePathsCounter(WorkerBase):
 
         logging.info("Batch de datos procesado")
 
-    # Serialize and send output batch
-    def _send_output_batch(self, transactions_batch):
-        message = message_protocol.internal.serialize(transactions_batch)
-        transactions_batch.clear()
-        self.output_queue.send(message)
-
     # Process EOF
-    def _process_eof(self):
+    def on_eof(self):
         logging.info("EOF recibido")
 
         # For each node with incoming edges
         batch_data = []
         for (start_node, end_node) in self.intermediate_nodes:
             # Get total of unique paths
-            total_unique_paths = len(self.intermediate_nodes[(start_node, end_node)])
-            batch_data.append((start_node, end_node, total_unique_paths))
-
-            # Check if total batch length is reached
-            if len(batch_data) == OUTPUT_BATCH_SIZE:
-                self._send_output_batch(batch_data)
-
-        if len(batch_data) > 0:
-            self._send_output_batch(batch_data)
-
+            yield len(self.intermediate_nodes[(start_node, end_node)])
+            
         logging.info("EOF procesado: datos enviados")
-
-    # Process message that arrived
-    def process_message(self, message, ack, nack):
-        fields = message_protocol.internal.deserialize(message)
-
-        if len(fields) > 1:
-            self._process_data_batch(fields)
-            ack()
-        elif len(fields) == 1:
-            self._process_eof(*fields)
-            ack()
-        else:
-            nack()

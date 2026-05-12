@@ -25,7 +25,7 @@ class TransactionsGraphAgg(WorkerBase):
         self.graph = DirectedGraph()
 
     # Process data message
-    def _process_data_batch(self, transactions_batch):
+    def process(self, transactions_batch):
         logging.info("Batch de transacciones recibido")
         # For each transaction on the batch
         for transaction in transactions_batch:
@@ -48,14 +48,8 @@ class TransactionsGraphAgg(WorkerBase):
         
         logging.info("Batch de transacciones procesado")
 
-    # Serialize and send output batch
-    def _send_output_batch(self, transactions_batch):
-        message = message_protocol.internal.serialize(transactions_batch)
-        transactions_batch.clear()
-        self.output_queue.send(message)
-
     # Process EOF
-    def _process_eof(self):
+    def on_eof(self):
         logging.info("EOF recibido")
         # New batch
         transactions_batch = []
@@ -68,28 +62,6 @@ class TransactionsGraphAgg(WorkerBase):
 
                 # For each tag to send
                 for tag in EDGES_TAGS:
+                    yield (origin, destination, tag)
 
-                    # Append edge
-                    transactions_batch.append((origin, destination, tag))
-                    # If limit was reached, then send
-                    if len(transactions_batch) == OUTPUT_BATCH_EDGES:
-                        self._send_output_batch(transactions_batch)
-                        logging.info("Batch de aristas enviado")
-
-        # If there are leftover edges, send them
-        self._send_output_batch(transactions_batch)
         logging.info("EOF procesado: datos enviados")
-
-    # Process message that arrived
-    def process_message(self, message, ack, nack):
-        fields = message_protocol.internal.deserialize(message)
-
-        if len(fields) > 1:
-            self._process_data_batch(fields)
-            ack()
-        elif len(fields) == 1:
-            self._process_eof(*fields)
-            ack()
-        else:
-            logging.error("Mensaje erróneo recibido")
-            nack()
