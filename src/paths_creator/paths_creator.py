@@ -25,7 +25,7 @@ class PathsCreator(WorkerBase):
         self.outgoing_edges = {}
 
     # Process data message
-    def _process_data_batch(self, transactions_batch):
+    def process(self, transactions_batch):
         logging.info("Batch de datos recibido")
         # For each transaction
         for transaction in transactions_batch:
@@ -53,14 +53,8 @@ class PathsCreator(WorkerBase):
 
         logging.info("Batch de datos procesado")
 
-    # Serialize and send output batch
-    def _send_output_batch(self, transactions_batch):
-        message = message_protocol.internal.serialize(transactions_batch)
-        transactions_batch.clear()
-        self.output_queue.send(message)
-
     # Process EOF
-    def _process_eof(self):
+    def on_eof(self):
         logging.info("EOF recibido")
 
         # For each node with incoming edges
@@ -75,26 +69,6 @@ class PathsCreator(WorkerBase):
                 # Create paths
                 for inc_neighbour in incoming_edges_neighbours:
                     for out_neighbour in outgoing_edges_neighbours:
-                        new_path = [inc_neighbour.as_tuple(), node.as_tuple(), out_neighbour.as_tuple()]
-                        batch.append(new_path)
-
-                        if len(batch) == OUTPUT_BATCH_SIZE:
-                            self._send_output_batch(batch)
-
-        if len(batch) > 0:
-            self._send_output_batch(batch)
+                        yield [inc_neighbour.as_tuple(), node.as_tuple(), out_neighbour.as_tuple()]
 
         logging.info("EOF procesado: datos enviados")
-
-    # Process message that arrived
-    def process_message(self, message, ack, nack):
-        fields = message_protocol.internal.deserialize(message)
-
-        if len(fields) > 1:
-            self._process_data_batch(fields)
-            ack()
-        elif len(fields) == 1:
-            self._process_eof(*fields)
-            ack()
-        else:
-            nack()
