@@ -13,10 +13,15 @@ CONTEXT_FOLDER = "./src/data_cleaner"
 # Environment variable names
 DOCKER_ENV_VARS_NAME = "environment"
 
-OUTPUT_EXCHANGE = "OUTPUT_EXCHANGE=cleaned_data_exchange"
-INPUT_QUEUE = "INPUT_QUEUE=raw_data_queue"
+## I/O
+INPUT_QUEUE_TAG = "INPUT_QUEUE"
+INPUT_EXCHANGE_TAG = "INPUT_EXCHANGE"
+OUTPUT_QUEUE_TAG = "OUTPUT_QUEUE"
+OUTPUT_EXCHANGE_TAG = "OUTPUT_EXCHANGE"
 
-def get_data_cleaner_docker_services(service_prefix, total_instances):
+def get_data_cleaner_docker_services(service_prefix, total_instances,
+                                    input_queue=None, input_exchange=None,
+                                    output_queue=None, output_exchange=None):
     with open(CONFIG_FILE, "r") as config_file:
         base_data_cleaner_service = yaml.safe_load(config_file)
 
@@ -31,8 +36,16 @@ def get_data_cleaner_docker_services(service_prefix, total_instances):
         new_service_config[DOCKER_BUILD_SECTION_NAME][DOCKER_BUILD_CONTEXT_SUBSECTION_NAME] = CONTEXT_FOLDER
 
         # Add environment variables
-        new_service_config[DOCKER_ENV_VARS_NAME].append(OUTPUT_EXCHANGE)
-        new_service_config[DOCKER_ENV_VARS_NAME].append(INPUT_QUEUE)
+        ## I/O
+        if input_queue is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{INPUT_QUEUE_TAG}={input_queue}")
+        elif input_exchange is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{INPUT_EXCHANGE_TAG}={input_exchange}")
+
+        if output_queue is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_QUEUE_TAG}={output_queue}")
+        elif output_exchange is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_EXCHANGE_TAG}={output_exchange}")
 
         # Add service in services dictionary
         new_service_name = f"{service_prefix}_{i}"
