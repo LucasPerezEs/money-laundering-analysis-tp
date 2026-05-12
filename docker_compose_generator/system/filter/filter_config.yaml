@@ -1,0 +1,17 @@
+build:
+  dockerfile: Dockerfile
+environment:
+- RABBITMQ_HOST=rabbitmq
+- N_UPSTREAM=1
+
+
+
+  RABBITMQ_HOST: host de RabbitMQ (default: rabbitmq)
+  INPUT_QUEUE: cola de entrada (si consume de cola simple)
+  INPUT_EXCHANGE: exchange de entrada (si consume de shard)
+  SHARD_ID        : id del shard de este worker
+  N_UPSTREAM      : cantidad de EOFs a esperar
+  OUTPUT_QUEUE    : cola de salida simple
+  OUTPUT_EXCHANGE : exchange de salida con sharding
+  OUTPUT_SHARDS   : cantidad de shards de salida (default 1)
+  BATCH_SIZE      : filas por batch de salida (default 500)
