@@ -10,6 +10,9 @@ DOCKER_BUILD_CONTEXT_SUBSECTION_NAME = "context"
 
 CONTEXT_FOLDER = "./src/data_cleaner"
 
+# Container name
+CONTAINER_NAME_TAG = "container_name"
+
 # Environment variable names
 DOCKER_ENV_VARS_NAME = "environment"
 
@@ -31,6 +34,9 @@ def get_data_cleaner_docker_services(service_prefix, total_instances,
     for i in range(total_instances):
         # Copy service base configuration
         new_service_config = copy.deepcopy(base_data_cleaner_service)
+
+        # Add container name
+        new_service_config[CONTAINER_NAME_TAG] = f"{service_prefix}_{i}"
 
         # Add context folder
         new_service_config[DOCKER_BUILD_SECTION_NAME][DOCKER_BUILD_CONTEXT_SUBSECTION_NAME] = CONTEXT_FOLDER
