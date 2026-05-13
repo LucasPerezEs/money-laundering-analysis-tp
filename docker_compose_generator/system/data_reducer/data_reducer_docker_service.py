@@ -2,7 +2,7 @@ import yaml
 import copy
 
 # Config file
-CONFIG_FILE = "data_cleaner_config.yaml"
+CONFIG_FILE = "data_reducer_config.yaml"
 
 # Build section
 DOCKER_BUILD_SECTION_NAME = "build"
@@ -22,7 +22,10 @@ INPUT_EXCHANGE_TAG = "INPUT_EXCHANGE"
 OUTPUT_QUEUE_TAG = "OUTPUT_QUEUE"
 OUTPUT_EXCHANGE_TAG = "OUTPUT_EXCHANGE"
 
-def get_data_cleaner_docker_services(service_prefix, total_instances,
+## Columns kept
+KEEP_COLUMNS_TAG = "KEEP_COLUMNS"
+
+def get_data_cleaner_docker_services(service_prefix, total_instances, columns_kept,
                                     input_queue=None, input_exchange=None,
                                     output_queue=None, output_exchange=None):
     with open(CONFIG_FILE, "r") as config_file:
@@ -53,6 +56,9 @@ def get_data_cleaner_docker_services(service_prefix, total_instances,
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_QUEUE_TAG}={output_queue}")
         elif output_exchange is not None:
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_EXCHANGE_TAG}={output_exchange}")
+        
+        # Columns to keep
+        new_service_config[DOCKER_ENV_VARS_NAME].append(f"{KEEP_COLUMNS_TAG}={",".join(columns_kept)}")
 
         # Add service in services dictionary
         data_cleaner_services[new_service_name] = new_service_config

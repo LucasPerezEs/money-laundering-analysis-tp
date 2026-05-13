@@ -27,7 +27,7 @@ FILTER_FIELD_TAG = "FILTER_FIELD"
 FILTER_OP_TAG = "FILTER_OP"
 FILTER_VALUE_TAG = "FILTER_VALUE"
 
-def get_filter_docker_services(service_prefix, total_instances, filter_field,
+def get_filters_docker_services(service_prefix, total_instances, filter_field,
                                filter_value, filter_op="eq",
                                input_queue=None, input_exchange=None,
                                output_queue=None, output_exchange=None):

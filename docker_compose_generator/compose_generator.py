@@ -1,23 +1,24 @@
 import argparse
 import yaml
 
-from system.system_docker_generator import generate_systems_docker
+from system.system_docker_generator import generate_system_docker_compose
 from client.client_docker_service import get_clients_docker_services
 
 def generate_docker_compose_file(total_clients):
-    docker_file = {}
+    services = {}
 
     # Create system
-    system_services = generate_systems_docker()
-    docker_file = docker_file | system_services
+    system_services = generate_system_docker_compose()
+    services = services | system_services
 
     # Create clients
     if total_clients > 0:
         raise Exception("TODO: Clients services creation")
         clients_services = get_clients_docker_services("", "", total_clients=total_clients)
-        docker_file = docker_file | clients_services
+        services = services | clients_services
 
     # Store YAML file
+    docker_file = {"services" : services}
     with open("../docker-compose.yaml") as output_file:
         yaml.safe_dump(docker_file, output_file)
 
