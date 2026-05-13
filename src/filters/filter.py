@@ -1,3 +1,18 @@
+"""
+FilterWorker: filtra filas según una condición configurable por variables de entorno.
+
+Recibe filas en formato dict y decide si reenviarlas o descartarlas según:
+  - FILTER_FIELD: índice (sobre list(data.values())) o clave del dict a evaluar
+  - FILTER_OP   : operador (eq, neq, lt, le, gt, ge, contains, startswith, endswith)
+  - FILTER_VALUE: valor de comparación (número o fecha en formato 'YYYY/MM/DD HH:MM' o 'YYYY/MM/DD')
+
+Comportamiento:
+  - Stateless: escala libremente.
+  - Si falta el campo objetivo lanza KeyError/IndexError/TypeError (WorkerBase decide nack/retry).
+  - Si FILTER_VALUE es fecha se compara por día (se usa common.utils.dates.parse_date).
+"""
+
+
 import os
 import logging
 import datetime
@@ -104,7 +119,3 @@ class FilterWorker(WorkerBase):
     def on_eof(self):
         # no produce filas extra; WorkerBase propagará EOF según su política
         return []
-
-
-if __name__ == "__main__":
-    FilterWorker().run()
