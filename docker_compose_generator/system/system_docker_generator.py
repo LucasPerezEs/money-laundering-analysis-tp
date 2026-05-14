@@ -135,7 +135,11 @@ def generate_system_docker_compose():
                                                          )
     
     ## Send edges as "in" for destination node and "out" for origin node
-    raise Exception("TODO: Splitter de aristas")
+    q4_graphs_edges_splitters = get_splitter_docker_services("q4_edges_splitter", 1,
+                                                        input_queue="q4_subgraphs_edges",
+                                                        output_exchange="q4_edges_exc",
+                                                        key_fields=["From Bank", "Account", "To Bank", "Account.1"],
+                                                        )
 
     ## Paths creators
     q4_paths_creators = get_scatter_gather_services("q4_path_creator", "paths_creator",
