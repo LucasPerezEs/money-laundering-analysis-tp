@@ -196,7 +196,12 @@ def generate_system_docker_compose():
                                                  )
     
     ## Add results
-    raise Exception("TODO: Sumador que sume resultados de todo")
+    q5_transactions_counter = get_aggregator_docker_services("transaction_counter", 1,
+                                                 input_queue="q5_countable_transactions",
+                                                 output_queue="q5_totals_reached",
+                                                 agg_op="sum", agg_field="count",
+                                                 )
+    system = system | q5_transactions_counter
 
     # Return complete YAML system
     return system
