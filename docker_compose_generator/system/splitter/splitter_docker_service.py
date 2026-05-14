@@ -2,13 +2,13 @@ import yaml
 import copy
 
 # Config file
-CONFIG_FILE = "aggregator_config.yaml"
+CONFIG_FILE = "splitter_config.yaml"
 
 # Build section
 DOCKER_BUILD_SECTION_NAME = "build"
 DOCKER_BUILD_CONTEXT_SUBSECTION_NAME = "context"
 
-CONTEXT_FOLDER = "./src/aggregator"
+CONTEXT_FOLDER = "./src/splitter"
 
 # Container name
 CONTAINER_NAME_TAG = "container_name"
@@ -23,29 +23,27 @@ OUTPUT_QUEUE_TAG = "OUTPUT_QUEUE"
 OUTPUT_EXCHANGE_TAG = "OUTPUT_EXCHANGE"
 
 ## Aggregation operation
-AGG_OP_TAG = "AGG_OP"
-AGG_FIELD_TAG = "AGG_FIELD"
-KEY_FIELD_TAG = "KEY_FIELD"
-CARRY_FIELDS_TAG = "CARRY_FIELDS"
-OUTPUT_TAG_TAG = "OUTPUT_TAG"
+SHARD_KEY_FIELD_TAG = "SHARD_KEY_FIELD"
+SHARD_KEY_FIELDS_TAG = "SHARD_KEY_FIELDS"
+TAG_SOURCE_TAG = "TAG_SOURCE"
 
 
-def get_aggregator_docker_services(service_prefix, total_instances,
+def get_splitter_docker_services(service_prefix, total_instances,
                                input_queue=None, input_exchange=None,
                                output_queue=None, output_exchange=None,
-                               agg_op="count", agg_field=None, key_field=None,
-                               carry_fields=None, output_tag=None):
+                               key_field=None, key_fields=None,
+                               source_tag=None):
     
     # Open config file
     with open(CONFIG_FILE, "r") as config_file:
-        base_aggregator_service = yaml.safe_load(config_file)
+        base_splitter_service = yaml.safe_load(config_file)
 
     # Create all services
-    aggregator_services = {}
+    splitter_services = {}
 
     for i in range(total_instances):
         # Copy service base configuration
-        new_service_config = copy.deepcopy(base_aggregator_service)
+        new_service_config = copy.deepcopy(base_splitter_service)
 
         # Add container name
         new_service_name = f"{service_prefix}_{i}"
@@ -67,17 +65,15 @@ def get_aggregator_docker_services(service_prefix, total_instances,
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_EXCHANGE_TAG}={output_exchange}")
 
         ## Aggregation operation
-        new_service_config[DOCKER_ENV_VARS_NAME].append(f"{AGG_OP_TAG}={agg_op}")
-        if agg_field is not None:
-            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{AGG_FIELD_TAG}={agg_field}")
         if key_field is not None:
-            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{KEY_FIELD_TAG}={key_field}")
-        if carry_fields is not None:
-            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{CARRY_FIELDS_TAG}={carry_fields}")
-        if output_tag is not None:
-            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_TAG_TAG}={output_tag}")
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SHARD_KEY_FIELD_TAG}={key_field}")
+        elif key_fields is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SHARD_KEY_FIELDS_TAG}={",".join(key_fields)}")
+
+        if source_tag is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{TAG_SOURCE_TAG}={source_tag}")
 
         # Add service in services dictionary
-        aggregator_services[new_service_name] = new_service_config
+        splitter_services[new_service_name] = new_service_config
 
-    return aggregator_services
+    return splitter_services
