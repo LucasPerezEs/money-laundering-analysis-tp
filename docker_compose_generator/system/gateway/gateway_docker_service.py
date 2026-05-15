@@ -34,7 +34,7 @@ def get_gateway_docker_services(input_query_queue_prefix, total_queries, output_
     ## I/O
     gateway_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_QUEUE}={output_queue}")
     for i in range(total_queries):
-        gateway_service_config[DOCKER_ENV_VARS_NAME].append(f"{INPUT_QUEUE}_{i}={input_query_queue_prefix}_{i}")
+        gateway_service_config[DOCKER_ENV_VARS_NAME].append(f"{INPUT_QUEUE}_{i+1}={input_query_queue_prefix}_{i+1}")
 
     # Add service name
     new_service_config = { SERVICE_NAME : gateway_service_config}
