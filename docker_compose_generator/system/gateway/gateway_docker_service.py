@@ -1,5 +1,5 @@
 import yaml
-import copy
+import os
 
 # Config file
 CONFIG_FILE = "gateway_config.yaml"
@@ -21,7 +21,10 @@ INPUT_QUEUE = "INPUT_QUEUE"
 
 def get_gateway_docker_services(input_query_queue_prefix, total_queries, output_queue):
     # Open config file
-    with open(CONFIG_FILE, "r") as config_file:
+    base_path = os.path.dirname(__file__)
+    config_file_path = os.path.join(base_path, CONFIG_FILE)
+    
+    with open(config_file_path, "r") as config_file:
         gateway_service_config = yaml.safe_load(config_file)
 
     # Add context folder

@@ -1,5 +1,6 @@
 import yaml
 import copy
+import os
 
 # Config file
 CONFIG_FILE = "filter_config.yaml"
@@ -33,7 +34,10 @@ def get_filters_docker_services(service_prefix, total_instances, filter_field,
                                output_queue=None, output_exchange=None):
     
     # Open config file
-    with open(CONFIG_FILE, "r") as config_file:
+    base_path = os.path.dirname(__file__)
+    config_file_path = os.path.join(base_path, CONFIG_FILE)
+
+    with open(config_file_path, "r") as config_file:
         base_filter_service = yaml.safe_load(config_file)
 
     # Create all services
