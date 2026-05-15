@@ -19,7 +19,7 @@ def generate_docker_compose_file(total_clients):
 
     # Store YAML file
     docker_file = {"services" : services}
-    with open("../docker-compose.yaml") as output_file:
+    with open("docker-compose.yaml", "w") as output_file:
         yaml.safe_dump(docker_file, output_file)
 
 if __name__ == "__main__":
@@ -27,11 +27,11 @@ if __name__ == "__main__":
     argsparser = argparse.ArgumentParser()
 
     # Add number of clients
-    argsparser.add_argument("--total_clients", default=0)
+    argsparser.add_argument("--total_clients", type=int, default=0)
 
     # Get arguments
     args = argsparser.parse_args()
-    total_clients = args["total_clients"]
+    total_clients = args.total_clients
 
     # Execute generator
     generate_docker_compose_file(total_clients)

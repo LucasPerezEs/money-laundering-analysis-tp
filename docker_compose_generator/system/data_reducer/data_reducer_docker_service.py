@@ -1,5 +1,6 @@
 import yaml
 import copy
+import os
 
 # Config file
 CONFIG_FILE = "data_reducer_config.yaml"
@@ -30,7 +31,10 @@ KEEP_COLUMNS_TAG = "KEEP_COLUMNS"
 def get_data_reducer_docker_services(service_prefix, total_instances, columns_kept,
                                     input_queue=None, input_exchange=None,
                                     output_queue=None, output_exchange=None):
-    with open(CONFIG_FILE, "r") as config_file:
+    base_path = os.path.dirname(__file__)
+    config_file_path = os.path.join(base_path, CONFIG_FILE)
+
+    with open(config_file_path, "r") as config_file:
         base_data_cleaner_service = yaml.safe_load(config_file)
 
     # Create all services
