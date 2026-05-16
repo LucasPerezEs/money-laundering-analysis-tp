@@ -6,7 +6,9 @@ import signal
 
 from common import message_protocol
 
-INPUT_FILE = os.environ["INPUT_FILE"]
+BATCH_SIZE = os.environ["BATCH_SIZE"]
+ACCOUNTS_INPUT_FILE = os.environ["ACCOUNTS_INPUT_FILE"]
+TRANSACTIONS_INPUT_FILE = os.environ["TRANSACTIONS_INPUT_FILE"]
 OUTPUT_FILE = os.environ["OUTPUT_FILE"]
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
@@ -34,10 +36,15 @@ class Client:
         if self.server_socket:
             self.server_socket.shutdown(socket.SHUT_RDWR)
 
-    def send_fruit_records(self, input_file):
-        logging.info("Sending fruit records")
-        with open(input_file, newline="\n") as csvfile:
-            csv_reader = csv.reader(csvfile, delimiter=",", quotechar='"')
+    def send_bank_accounts_information(self, accounts_input_file):
+        pass
+
+    def send_transactions_records(self, transactions_input_file):
+        logging.info("Sending transactions records...")
+
+        # Send transactions
+        with open(transactions_input_file, newline="\n") as transactions_file:
+            csv_reader = csv.reader(transactions_file, delimiter=",", quotechar='"')
             for row in csv_reader:
                 [fruit, amount] = row
                 message_protocol.external.send_msg(
@@ -48,25 +55,14 @@ class Client:
                 )
                 message_protocol.external.recv_msg(self.server_socket)
 
+        # Send EOF
         message_protocol.external.send_msg(
             self.server_socket, message_protocol.external.MsgType.END_OF_RECODS
         )
-        message_protocol.external.recv_msg(self.server_socket)
 
-    def recv_fruit_top(self, output_file):
-        logging.info("Receiving fruit top")
-        fruit_top_message = message_protocol.external.recv_msg(self.server_socket)
-        message_protocol.external.send_msg(
-            self.server_socket, message_protocol.external.MsgType.ACK
-        )
-
-        if fruit_top_message[0] != message_protocol.external.MsgType.FRUIT_TOP:
-            raise TypeError("Expected a FRUIT_TOP message")
-
-        with open(output_file, "w") as csvfile:
-            csv_writer = csv.writer(csvfile, delimiter=",", quotechar='"')
-            for fruit_item in fruit_top_message[1]:
-                csv_writer.writerow(fruit_item)
+    def recv_queries_results(self, output_file):
+        logging.info("Receiving results...")
+        raise Exception("TODO: Receive queries results")
 
 
 def main() -> int:
@@ -75,8 +71,9 @@ def main() -> int:
 
     try:
         client.connect(SERVER_HOST, SERVER_PORT)
-        client.send_fruit_records(INPUT_FILE)
-        client.recv_fruit_top(OUTPUT_FILE)
+        client.send_bank_accounts_information(ACCOUNTS_INPUT_FILE)
+        client.send_transactions_records(TRANSACTIONS_INPUT_FILE)
+        client.recv_queries_results(OUTPUT_FILE)
     except socket.error:
         if not client.closed:
             logging.error("The connection with the server was lost")
