@@ -36,28 +36,71 @@ class Client:
         if self.server_socket:
             self.server_socket.shutdown(socket.SHUT_RDWR)
 
+
+    def _send_csv_data_batches(self, csv_input_file, data_type, data_preparation_func):
+        with open(csv_input_file, newline="\n") as input_file:
+            csv_reader = csv.reader(input_file, delimiter=",", quotechar='"')
+
+            # Fill batch
+            batch = []
+            for data_row in csv_reader:
+                batch.append(data_preparation_func(data_row))
+                
+                # If max size was reached
+                if len(batch) == BATCH_SIZE:
+                    message_protocol.external.send_msg(
+                        socket,
+                        data_type,
+                        batch
+                    )
+                    batch.clear()
+
+            # Check if remaining data is left
+            if len(batch) > 0:
+                message_protocol.external.send_msg(
+                    socket,
+                    data_type,
+                    batch
+                )
+                batch.clear()
+
+
+    def _get_next_account(self, row):
+        return row
+
     def send_bank_accounts_information(self, accounts_input_file):
-        pass
+        logging.info("Sending accounts records...")
+
+        # Send accounts
+        self._send_csv_data_batches(
+            accounts_input_file,
+            message_protocol.external.MsgType.ACCOUNT_BATCH,
+            self._get_next_account
+            )
+
+        # Send EOF
+        message_protocol.external.send_msg(
+            self.server_socket, message_protocol.external.MsgType.END_OF_RECORDS
+        )
+
+
+    def _get_next_transaction(self, row):
+        row.pop()
+        return row
 
     def send_transactions_records(self, transactions_input_file):
         logging.info("Sending transactions records...")
 
         # Send transactions
-        with open(transactions_input_file, newline="\n") as transactions_file:
-            csv_reader = csv.reader(transactions_file, delimiter=",", quotechar='"')
-            for row in csv_reader:
-                [fruit, amount] = row
-                message_protocol.external.send_msg(
-                    self.server_socket,
-                    message_protocol.external.MsgType.FRUIT_RECORD,
-                    fruit,
-                    int(amount),
-                )
-                message_protocol.external.recv_msg(self.server_socket)
+        self._send_csv_data_batches(
+            transactions_input_file,
+            message_protocol.external.MsgType.TRANSACTION_BATCH,
+            self._get_next_transaction
+            )
 
         # Send EOF
         message_protocol.external.send_msg(
-            self.server_socket, message_protocol.external.MsgType.END_OF_RECODS
+            self.server_socket, message_protocol.external.MsgType.END_OF_RECORDS
         )
 
     def recv_queries_results(self, output_file):
@@ -73,7 +116,7 @@ def main() -> int:
         client.connect(SERVER_HOST, SERVER_PORT)
         client.send_bank_accounts_information(ACCOUNTS_INPUT_FILE)
         client.send_transactions_records(TRANSACTIONS_INPUT_FILE)
-        client.recv_queries_results(OUTPUT_FILE)
+        #client.recv_queries_results(OUTPUT_FILE)
     except socket.error:
         if not client.closed:
             logging.error("The connection with the server was lost")

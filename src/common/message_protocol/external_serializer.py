@@ -1,6 +1,7 @@
 UINT8_SIZE = 1
 UINT16_SIZE = 2
 UINT32_SIZE = 4
+UINT64_SIZE = 8
 BOOL_SIZE = 1
 
 
@@ -24,6 +25,10 @@ def serialize_uint32(u):
     return u.to_bytes(UINT32_SIZE, "big")
 
 
+def serialize_uint64(u):
+    return u.to_bytes(UINT64_SIZE, "big")
+
+
 def deserialize_uint8(b):
     return int.from_bytes(b, byteorder="big", signed=False)
 
@@ -33,6 +38,10 @@ def deserialize_uint16(b):
 
 
 def deserialize_uint32(b):
+    return int.from_bytes(b, byteorder="big", signed=False)
+
+
+def deserialize_uint64(b):
     return int.from_bytes(b, byteorder="big", signed=False)
 
 

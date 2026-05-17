@@ -9,7 +9,7 @@ CONFIG_FILE = "data_reducer_config.yaml"
 DOCKER_BUILD_SECTION_NAME = "build"
 DOCKER_BUILD_CONTEXT_SUBSECTION_NAME = "context"
 
-CONTEXT_FOLDER = "./src/data_cleaner"
+CONTEXT_FOLDER = "./src/data_reducer"
 
 # Container name
 CONTAINER_NAME_TAG = "container_name"
@@ -35,14 +35,14 @@ def get_data_reducer_docker_services(service_prefix, total_instances, columns_ke
     config_file_path = os.path.join(base_path, CONFIG_FILE)
 
     with open(config_file_path, "r") as config_file:
-        base_data_cleaner_service = yaml.safe_load(config_file)
+        base_data_reducer_service = yaml.safe_load(config_file)
 
     # Create all services
-    data_cleaner_services = {}
+    data_reducer_services = {}
 
     for i in range(total_instances):
         # Copy service base configuration
-        new_service_config = copy.deepcopy(base_data_cleaner_service)
+        new_service_config = copy.deepcopy(base_data_reducer_service)
 
         # Add container name
         new_service_name = f"{service_prefix}_{i}"
@@ -69,6 +69,6 @@ def get_data_reducer_docker_services(service_prefix, total_instances, columns_ke
         new_service_config[DOCKER_ENV_VARS_NAME].append(f"{KEEP_COLUMNS_TAG}={",".join(columns_kept)}")
 
         # Add service in services dictionary
-        data_cleaner_services[new_service_name] = new_service_config
+        data_reducer_services[new_service_name] = new_service_config
 
-    return data_cleaner_services
+    return data_reducer_services

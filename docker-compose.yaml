@@ -13,14 +13,14 @@ services:
     - SERVER_HOST=gateway
     - SERVER_PORT=7659
     - OUTPUT_QUEUE=raw_data_queue
-    - INPUT_QUEUE_0=results_0
     - INPUT_QUEUE_1=results_1
     - INPUT_QUEUE_2=results_2
     - INPUT_QUEUE_3=results_3
     - INPUT_QUEUE_4=results_4
+    - INPUT_QUEUE_5=results_5
   q1_data_reducer_0:
     build:
-      context: ./src/data_cleaner
+      context: ./src/data_reducer
       dockerfile: Dockerfile
     container_name: q1_data_reducer_0
     environment:
