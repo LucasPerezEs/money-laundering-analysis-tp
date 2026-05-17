@@ -24,9 +24,9 @@ import signal
 import time
 import sys
 
-from middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
-from middleware.middleware_sharded import ShardedExchangeConsumer, ShardedExchangeProducer
-from middleware.middleware import MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError
+from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
+from common.middleware.middleware_sharded import ShardedExchangeConsumer, ShardedExchangeProducer
+from common.middleware.middleware import MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError
 
 logger = logging.getLogger(__name__)
 

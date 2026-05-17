@@ -48,3 +48,8 @@ class DataReducer(WorkerBase):
 
     def on_eof(self):
         return []
+
+if __name__ == "__main__":
+    logging.basicConfig(filename="data_reducer.log", level=logging.INFO)
+    data_reducer = DataReducer()
+    data_reducer.run()

@@ -209,3 +209,9 @@ class FilterWorker(WorkerBase):
 
     def on_eof(self):
         return []
+
+
+if __name__ == "__main__":
+    logging.basicConfig(filename="filter_worker.log", level=logging.INFO)
+    filter_worker = FilterWorker()
+    filter_worker.run()

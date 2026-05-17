@@ -1,8 +1,8 @@
 services:
   gateway:
     build:
-      context: ./src/gateway
-      dockerfile: Dockerfile
+      context: ./src
+      dockerfile: gateway/Dockerfile
     container_name: gateway
     depends_on:
       rabbitmq:
@@ -20,8 +20,8 @@ services:
     - INPUT_QUEUE_5=results_5
   q1_data_reducer_0:
     build:
-      context: ./src/data_reducer
-      dockerfile: Dockerfile
+      context: ./src
+      dockerfile: data_reducer/Dockerfile
     container_name: q1_data_reducer_0
     environment:
     - RABBITMQ_HOST=rabbitmq
@@ -33,8 +33,8 @@ services:
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
   q1_filter_lt_50_usd_0:
     build:
-      context: ./src/filter
-      dockerfile: Dockerfile
+      context: ./src/
+      dockerfile: filter/Dockerfile
     container_name: q1_filter_lt_50_usd_0
     environment:
     - RABBITMQ_HOST=rabbitmq
@@ -44,10 +44,26 @@ services:
     - FILTER_FIELD=Amount Paid
     - FILTER_OP=50
     - FILTER_VALUE=lt
+  rabbitmq:
+    build:
+      context: ./src/rabbitmq
+      dockerfile: Dockerfile
+    container_name: rabbitmq
+    environment:
+    - RABBITMQ_LOG_LEVELS=error
+    healthcheck:
+      interval: 5s
+      retries: 10
+      start_period: 50s
+      test: rabbitmq-diagnostics check_port_connectivity
+      timeout: 3s
+    ports:
+    - 5672:5672
+    - 15672:15672
   usd_filter_0:
     build:
-      context: ./src/filter
-      dockerfile: Dockerfile
+      context: ./src/
+      dockerfile: filter/Dockerfile
     container_name: usd_filter_0
     environment:
     - RABBITMQ_HOST=rabbitmq

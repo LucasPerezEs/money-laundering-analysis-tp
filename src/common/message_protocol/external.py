@@ -97,7 +97,6 @@ def _recv_empty(socket):
 
 RECV_MSG_HANDLERS = {
     MsgType.TRANSACTION_BATCH: _recv_transactions_batch,
-    MsgType.ACCOUNT: _recv_fruit_top,
     MsgType.ACK: _recv_empty,
     MsgType.END_OF_RECORDS: _recv_empty,
 }

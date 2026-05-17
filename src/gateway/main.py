@@ -23,7 +23,7 @@ def handle_client_request(client_socket, message_handler):
             message = message_protocol.external.recv_msg(client_socket)
 
             if message[0] == message_protocol.external.MsgType.ACCOUNT_BATCH:
-
+                logging.info("Batch de cuentas recibido!")
                 # Print batch
                 batch = message[1]
                 for account in batch:
@@ -45,6 +45,7 @@ def handle_client_request(client_socket, message_handler):
             message = message_protocol.external.recv_msg(client_socket)
 
             if message[0] == message_protocol.external.MsgType.TRANSACTION_BATCH:
+                logging.info("Batch de transacciones recibido!")
 
                 # Print batch
                 batch = message[1]
@@ -71,6 +72,8 @@ def handle_client_request(client_socket, message_handler):
 
 
 def handle_client_response(client_list):
+    print("handle_client_response")
+    return
     input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
 
     def _consume_result(message, ack, nack):

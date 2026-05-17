@@ -2,6 +2,7 @@ from .aggregator.aggregator_docker_service import get_aggregator_docker_services
 from .data_reducer.data_reducer_docker_service import get_data_reducer_docker_services
 from .filter.filter_docker_service import get_filters_docker_services
 from .gateway.gateway_docker_service import get_gateway_docker_services
+from .rabbitmq.rabbitmq_docker_service import get_rabbitmq_docker_service
 from .scatter_gather.scatter_gather_generators import get_scatter_gather_services
 from .splitter.splitter_docker_service import get_splitter_docker_services
 
@@ -21,6 +22,10 @@ def generate_system_docker_compose():
     with open(csv_path, mode="r") as config_file:
         # Get config file reader
         config_file_reader = csv.DictReader(config_file)
+
+        # Create RabbitMQ service
+        rabbitmq = get_rabbitmq_docker_service()
+        system = system | rabbitmq
 
         # Create gateway
         gateway = get_gateway_docker_services(

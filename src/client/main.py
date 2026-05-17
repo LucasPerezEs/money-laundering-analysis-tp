@@ -6,9 +6,9 @@ import signal
 
 from common import message_protocol
 
-BATCH_SIZE = os.environ["BATCH_SIZE"]
-ACCOUNTS_INPUT_FILE = os.environ["ACCOUNTS_INPUT_FILE"]
-TRANSACTIONS_INPUT_FILE = os.environ["TRANSACTIONS_INPUT_FILE"]
+BATCH_SIZE = 50
+ACCOUNTS_INPUT_FILE = "datasets/test/test_accounts.csv"
+TRANSACTIONS_INPUT_FILE = "datasets/test/test_transactions.csv"
 OUTPUT_FILE = os.environ["OUTPUT_FILE"]
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])

@@ -9,7 +9,7 @@ CONFIG_FILE = "data_reducer_config.yaml"
 DOCKER_BUILD_SECTION_NAME = "build"
 DOCKER_BUILD_CONTEXT_SUBSECTION_NAME = "context"
 
-CONTEXT_FOLDER = "./src/data_reducer"
+CONTEXT_FOLDER = "./src"
 
 # Container name
 CONTAINER_NAME_TAG = "container_name"

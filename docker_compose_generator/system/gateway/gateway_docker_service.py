@@ -11,7 +11,7 @@ SERVICE_NAME="gateway"
 DOCKER_BUILD_SECTION_NAME = "build"
 DOCKER_BUILD_CONTEXT_SUBSECTION_NAME = "context"
 
-CONTEXT_FOLDER = "./src/gateway"
+CONTEXT_FOLDER = "./src"
 
 # Environment variable names
 DOCKER_ENV_VARS_NAME = "environment"
