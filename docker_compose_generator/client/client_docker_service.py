@@ -5,12 +5,6 @@ import yaml
 CONFIG_FILE = "client_config.yaml"
 CLIENT_NAME_PREFIX = "client"
 
-# Build section
-DOCKER_BUILD_SECTION_NAME = "build"
-DOCKER_BUILD_CONTEXT_SUBSECTION_NAME = "context"
-
-CONTEXT_FOLDER = "./src/client"
-
 # Container name
 CONTAINER_NAME_TAG = "container_name"
 
@@ -39,9 +33,6 @@ def get_clients_docker_services(accounts_file_path, transactions_file_path, outp
         # Add container name
         client_name = f"{CLIENT_NAME_PREFIX}_{i}"
         new_client_service_config[CONTAINER_NAME_TAG] = client_name
-
-        # Add context folder
-        new_client_service_config[DOCKER_BUILD_SECTION_NAME][DOCKER_BUILD_CONTEXT_SUBSECTION_NAME] = CONTEXT_FOLDER
 
         # Add environment variables
         new_client_service_config[DOCKER_ENV_VARS_NAME].append(f"{ACCOUNTS_INPUT_FILE}={accounts_file_path}")

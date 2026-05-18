@@ -29,8 +29,13 @@ class Client:
             self._prev_sigterm_handler(signum, frame)
 
     def connect(self, server_host, server_port):
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.connect((server_host, server_port))
+        while True:
+            try:
+                self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.server_socket.connect((server_host, server_port))
+                break
+            except:
+                continue
 
     def disconnect(self):
         if self.server_socket:

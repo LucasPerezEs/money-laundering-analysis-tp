@@ -1,8 +1,8 @@
 services:
   client_0:
     build:
-      context: ./src/client
-      dockerfile: Dockerfile
+      context: ./src/
+      dockerfile: client/Dockerfile
     container_name: client_0
     environment:
     - MOM_HOST=rabbitmq
@@ -12,6 +12,8 @@ services:
     - ACCOUNTS_INPUT_FILE=datasets/test/test_accounts.csv
     - TRANSACTIONS_INPUT_FILE=datasets/test/test_transactions.csv
     - OUTPUT_FILE=queries_results.csv
+    volumes:
+    - ./datasets/test:/datasets/test
   gateway:
     build:
       context: ./src
