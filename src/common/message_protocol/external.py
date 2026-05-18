@@ -1,12 +1,13 @@
-import datetime
 import enum
+
+from datetime import datetime
 
 from asyncio import IncompleteReadError
 
 from . import external_serializer
 
 
-class MsgType(enum.Enum):
+class MsgType(enum.IntEnum):
     TRANSACTION_BATCH = enum.auto()     # Transactions batch
     ACCOUNT_BATCH = enum.auto()         # Accounts batch
     ACK = enum.auto()                   # ACk of batch
@@ -31,7 +32,7 @@ def _recv_sized(socket, size):
     return bytes(buf)
 
 def _deserialize_string(socket):
-    str_size = external_serializer.deserialize_string(_recv_sized(socket, external_serializer.UINT8_SIZE))
+    str_size = external_serializer.deserialize_uint8(_recv_sized(socket, external_serializer.UINT8_SIZE))
     return external_serializer.deserialize_string(_recv_sized(socket, str_size))
 
 
@@ -44,7 +45,7 @@ def _recv_transactions_batch(socket):
     batch = []
     for i in range(batch_size):
         # Timestamp
-        timestamp = external_serializer.deserialize_string(_recv_sized(socket, external_serializer.UINT64_SIZE))
+        timestamp = external_serializer.deserialize_uint64(_recv_sized(socket, external_serializer.UINT64_SIZE))
         
         # Origin account
         origin_bank = external_serializer.deserialize_uint32(
@@ -80,15 +81,33 @@ def _recv_transactions_batch(socket):
 
     return batch
 
-def _recv_fruit_top(socket):
-    fruit_top_size = external_serializer.deserialize_uint32(
-        _recv_sized(socket, external_serializer.UINT32_SIZE)
+def _recv_accounts_batch(socket):
+    batch_size = external_serializer.deserialize_uint16(
+        _recv_sized(socket, external_serializer.UINT16_SIZE)
     )
-    fruit_top = []
-    for i in range(fruit_top_size):
-        fruit_record = _recv_fruit_record(socket)
-        fruit_top.append(fruit_record)
-    return fruit_top
+
+    batch = []
+    for i in range(batch_size):
+        # Bank name
+        bank_name = _deserialize_string(socket)
+
+        # Get bank ID
+        bank_id  = external_serializer.deserialize_uint32(
+            _recv_sized(socket, external_serializer.UINT32_SIZE)
+        )
+
+        # Get account number
+        acc_number = _deserialize_string(socket)
+
+        # Get entity ID
+        entity_id = _deserialize_string(socket)
+
+        # Get entity name
+        entity_name = _deserialize_string(socket)
+
+        batch.append([bank_name, bank_id, acc_number, entity_id, entity_name])
+
+    return batch
 
 
 def _recv_empty(socket):
@@ -97,6 +116,7 @@ def _recv_empty(socket):
 
 RECV_MSG_HANDLERS = {
     MsgType.TRANSACTION_BATCH: _recv_transactions_batch,
+    MsgType.ACCOUNT_BATCH: _recv_accounts_batch,
     MsgType.ACK: _recv_empty,
     MsgType.END_OF_RECORDS: _recv_empty,
 }
@@ -118,7 +138,7 @@ def _serialize_transaction(timestamp, origin_bank, origin_acc,
                       amount_paid, payment_currency, payment_fmt):
     return b"".join(
         [
-            external_serializer.serialize_uint64(int(datetime.strptime(timestamp, "%Y-%m-%d %H:%M")).timestamp()),
+            external_serializer.serialize_uint64(int(datetime.strptime(timestamp, "%Y/%m/%d %H:%M").timestamp())),
             external_serializer.serialize_uint32(int(origin_bank)),
             external_serializer.serialize_uint8(len(origin_acc)),
             external_serializer.serialize_string(origin_acc),
@@ -151,23 +171,31 @@ def _send_transactions_batch(socket, batch):
     socket.sendall(msg)
 
 ## Accounts
-def _send_accounts_batch(socket, batch_max_size, account_fields_gen):
+def _serialize_account(bank_name, bank_id, acc_number, entity_id, entity_name):
+    return b"".join(
+        [
+            external_serializer.serialize_uint8(len(bank_name)),
+            external_serializer.serialize_string(bank_name),
+            external_serializer.serialize_uint32(int(bank_id)),
+            external_serializer.serialize_uint8(len(acc_number)),
+            external_serializer.serialize_string(acc_number),
+            external_serializer.serialize_uint8(len(entity_id)),
+            external_serializer.serialize_string(entity_id),
+            external_serializer.serialize_uint8(len(entity_name)),
+            external_serializer.serialize_string(entity_name),
+        ]
+    )
+
+def _send_accounts_batch(socket, batch):
     # Send start of transaction batch
     msg = external_serializer.serialize_uint8(MsgType.ACCOUNT_BATCH)
+    msg += external_serializer.serialize_uint16(len(batch))
+
+    # Add transactions to batch
+    for fields in batch:
+        msg += _serialize_account(*fields)
+
     socket.sendall(msg)
-
-    # Add accounts to batch
-    current_batch_size = 0
-    for fields in account_fields_gen:
-        msg += _serialize_transaction(*fields)
-        current_batch_size += 1
-
-        # If max size was reached
-        if current_batch_size == batch_max_size:
-            break
-
-    # Send EOB
-    msg += external_serializer.serialize_uint8(MsgType.END_OF_BATCH)
 
 
 ## ACK

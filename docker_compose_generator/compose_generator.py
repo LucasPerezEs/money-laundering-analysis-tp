@@ -13,8 +13,10 @@ def generate_docker_compose_file(total_clients):
 
     # Create clients
     if total_clients > 0:
-        raise Exception("TODO: Clients services creation")
-        clients_services = get_clients_docker_services("", "", total_clients=total_clients)
+        clients_services = get_clients_docker_services("datasets/test/test_accounts.csv",
+                                                       "datasets/test/test_transactions.csv",
+                                                       "queries_results.csv",
+                                                       total_clients=total_clients)
         services = services | clients_services
 
     # Store YAML file

@@ -1,4 +1,17 @@
 services:
+  client_0:
+    build:
+      context: ./src/client
+      dockerfile: Dockerfile
+    container_name: client_0
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - SERVER_HOST=gateway
+    - SERVER_PORT=7659
+    - ACCOUNTS_INPUT_FILE=datasets/test/test_accounts.csv
+    - TRANSACTIONS_INPUT_FILE=datasets/test/test_transactions.csv
+    - OUTPUT_FILE=queries_results.csv
   gateway:
     build:
       context: ./src

@@ -1,4 +1,5 @@
 import copy
+import os
 import yaml
 
 CONFIG_FILE = "client_config.yaml"
@@ -17,13 +18,16 @@ CONTAINER_NAME_TAG = "container_name"
 DOCKER_ENV_VARS_NAME = "environment"
 
 ## I/O
-INPUT_FILE_TAG = "INPUT_FILE"
+ACCOUNTS_INPUT_FILE = "ACCOUNTS_INPUT_FILE"
+TRANSACTIONS_INPUT_FILE = "TRANSACTIONS_INPUT_FILE"
 OUTPUT_FILE_TAG = "OUTPUT_FILE"
 
 
-def get_clients_docker_services(input_file_path, output_file_path, total_clients):
+def get_clients_docker_services(accounts_file_path, transactions_file_path, output_file_path, total_clients):
     # Open config file
-    with open(CONFIG_FILE, "r") as config_file:
+    base_path = os.path.dirname(__file__)
+    config_file_path = os.path.join(base_path, CONFIG_FILE)
+    with open(config_file_path, "r") as config_file:
         base_client_service_config = yaml.safe_load(config_file)
 
     # Create empty services list
@@ -40,7 +44,8 @@ def get_clients_docker_services(input_file_path, output_file_path, total_clients
         new_client_service_config[DOCKER_BUILD_SECTION_NAME][DOCKER_BUILD_CONTEXT_SUBSECTION_NAME] = CONTEXT_FOLDER
 
         # Add environment variables
-        new_client_service_config[DOCKER_ENV_VARS_NAME].append(f"{INPUT_FILE_TAG}={input_file_path}")
+        new_client_service_config[DOCKER_ENV_VARS_NAME].append(f"{ACCOUNTS_INPUT_FILE}={accounts_file_path}")
+        new_client_service_config[DOCKER_ENV_VARS_NAME].append(f"{TRANSACTIONS_INPUT_FILE}={transactions_file_path}")
         new_client_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_FILE_TAG}={output_file_path}")
 
         # Add service

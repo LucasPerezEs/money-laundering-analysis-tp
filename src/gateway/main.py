@@ -10,16 +10,17 @@ SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 
 MOM_HOST = os.environ["MOM_HOST"]
-INPUT_QUEUE = os.environ["INPUT_QUEUE"]
-OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
+#INPUT_QUEUE = os.environ["INPUT_QUEUE"]
+#OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
 
 
 def handle_client_request(client_socket, message_handler):
-    output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
+    #output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
 
     try:
         # Accept accounts batches
         while True:
+            logging.info("Espero mensaje...")
             message = message_protocol.external.recv_msg(client_socket)
 
             if message[0] == message_protocol.external.MsgType.ACCOUNT_BATCH:
@@ -34,7 +35,7 @@ def handle_client_request(client_socket, message_handler):
                 )
             elif message[0] == message_protocol.external.MsgType.END_OF_RECORDS:
                 serialized_message = message_handler.serialize_eof_message(message[1])
-                output_queue.send(serialized_message)
+                #output_queue.send(serialized_message)
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
                 )
@@ -42,6 +43,7 @@ def handle_client_request(client_socket, message_handler):
 
         # Accept transactions batches
         while True:
+            logging.info("Espero mensaje...")
             message = message_protocol.external.recv_msg(client_socket)
 
             if message[0] == message_protocol.external.MsgType.TRANSACTION_BATCH:
@@ -57,7 +59,7 @@ def handle_client_request(client_socket, message_handler):
                 )
             elif message[0] == message_protocol.external.MsgType.END_OF_RECORDS:
                 serialized_message = message_handler.serialize_eof_message(message[1])
-                output_queue.send(serialized_message)
+                #output_queue.send(serialized_message)
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
                 )
@@ -68,7 +70,8 @@ def handle_client_request(client_socket, message_handler):
     except Exception as e:
         logging.error(e)
     finally:
-        output_queue.close()
+        #output_queue.close()
+        pass
 
 
 def handle_client_response(client_list):

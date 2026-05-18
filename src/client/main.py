@@ -7,8 +7,8 @@ import signal
 from common import message_protocol
 
 BATCH_SIZE = 50
-ACCOUNTS_INPUT_FILE = "datasets/test/test_accounts.csv"
-TRANSACTIONS_INPUT_FILE = "datasets/test/test_transactions.csv"
+ACCOUNTS_INPUT_FILE = os.environ["ACCOUNTS_INPUT_FILE"]
+TRANSACTIONS_INPUT_FILE = os.environ["TRANSACTIONS_INPUT_FILE"]
 OUTPUT_FILE = os.environ["OUTPUT_FILE"]
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
@@ -40,6 +40,7 @@ class Client:
     def _send_csv_data_batches(self, csv_input_file, data_type, data_preparation_func):
         with open(csv_input_file, newline="\n") as input_file:
             csv_reader = csv.reader(input_file, delimiter=",", quotechar='"')
+            next(csv_reader)
 
             # Fill batch
             batch = []
@@ -49,20 +50,22 @@ class Client:
                 # If max size was reached
                 if len(batch) == BATCH_SIZE:
                     message_protocol.external.send_msg(
-                        socket,
+                        self.server_socket,
                         data_type,
                         batch
                     )
                     batch.clear()
+                    message_protocol.external.recv_msg(self.server_socket)
 
             # Check if remaining data is left
             if len(batch) > 0:
                 message_protocol.external.send_msg(
-                    socket,
+                    self.server_socket,
                     data_type,
                     batch
                 )
                 batch.clear()
+                message_protocol.external.recv_msg(self.server_socket)
 
 
     def _get_next_account(self, row):
@@ -82,6 +85,7 @@ class Client:
         message_protocol.external.send_msg(
             self.server_socket, message_protocol.external.MsgType.END_OF_RECORDS
         )
+        message_protocol.external.recv_msg(self.server_socket)
 
 
     def _get_next_transaction(self, row):
@@ -102,6 +106,7 @@ class Client:
         message_protocol.external.send_msg(
             self.server_socket, message_protocol.external.MsgType.END_OF_RECORDS
         )
+        message_protocol.external.recv_msg(self.server_socket)
 
     def recv_queries_results(self, output_file):
         logging.info("Receiving results...")
