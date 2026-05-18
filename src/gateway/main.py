@@ -10,13 +10,26 @@ SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 
 MOM_HOST = os.environ["MOM_HOST"]
-#INPUT_QUEUE = os.environ["INPUT_QUEUE"]
-#OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
+INPUT_QUEUE_PREFIX = os.environ["INPUT_QUEUE_PREFIX"]
+OUTPUT_QUEUE = os.environ.get("OUTPUT_QUEUE", "")
+OUTPUT_EXCHANGE = os.environ.get("OUTPUT_EXCHANGE", "")
 
+TOTAL_QUERIES = os.environ["TOTAL_QUERIES"]
 
 def handle_client_request(client_socket, message_handler):
-    #output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
+    # Client's state
+    output_queue = None
+    banks = {}
 
+    # Build output
+    if OUTPUT_QUEUE != "":
+        output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
+    elif OUTPUT_EXCHANGE != "":
+        output_queue = middleware.MessageMiddlewareExchangeRabbitMQ(MOM_HOST, OUTPUT_EXCHANGE, ["gateway_data", "eof"])
+    else:
+        raise Exception("FATAL: no output given for data processing")
+
+    # Read from socket
     try:
         # Accept accounts batches
         while True:
@@ -25,17 +38,21 @@ def handle_client_request(client_socket, message_handler):
 
             if message[0] == message_protocol.external.MsgType.ACCOUNT_BATCH:
                 logging.info("Batch de cuentas recibido!")
-                # Print batch
+                
+                # Iterate over batch
                 batch = message[1]
-                for account in batch:
-                    print(account)
+                for acc in batch:
+                    # Check if bank is not stored
+                    bank_name = acc[0]
+                    bank_id = acc[1]
+                    if bank_id not in banks:
+                        banks[bank_id] = bank_name
 
+                # Send ACK
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
                 )
             elif message[0] == message_protocol.external.MsgType.END_OF_RECORDS:
-                serialized_message = message_handler.serialize_eof_message(message[1])
-                #output_queue.send(serialized_message)
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
                 )
@@ -49,17 +66,16 @@ def handle_client_request(client_socket, message_handler):
             if message[0] == message_protocol.external.MsgType.TRANSACTION_BATCH:
                 logging.info("Batch de transacciones recibido!")
 
-                # Print batch
-                batch = message[1]
-                for transaction in batch:
-                    print(transaction)
+                print("TODO: Send transactions to processing")
 
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
                 )
             elif message[0] == message_protocol.external.MsgType.END_OF_RECORDS:
                 serialized_message = message_handler.serialize_eof_message(message[1])
-                #output_queue.send(serialized_message)
+
+                print("TODO: Send EOF")
+
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
                 )
@@ -70,14 +86,13 @@ def handle_client_request(client_socket, message_handler):
     except Exception as e:
         logging.error(e)
     finally:
-        #output_queue.close()
-        pass
+        output_queue.close()
 
 
-def handle_client_response(client_list):
+def handle_client_response(client_list, query_number):
     print("handle_client_response")
-    return
-    input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
+
+    input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, f"INPUT_QUEUE_{query_number}")
 
     def _consume_result(message, ack, nack):
         client_index = 0
@@ -127,8 +142,11 @@ def main():
         client_list = manager.list()
         sigterm_received = manager.Value("c_short", 0)
         with multiprocessing.Pool(processes=os.process_cpu_count()) as processes_pool:
-            processes_pool.apply_async(handle_client_response, (client_list,))
+            # Create handlers by queries
+            for query_number in range(TOTAL_QUERIES):
+                processes_pool.apply_async(handle_client_response, (client_list, query_number+1))
 
+            # Listen to new clients
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
                 logging.info("Listening to connections")
                 server_socket.bind((SERVER_HOST, SERVER_PORT))

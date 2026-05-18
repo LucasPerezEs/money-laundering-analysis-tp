@@ -30,15 +30,15 @@ def generate_system_docker_compose():
         # Create gateway
         gateway = get_gateway_docker_services(
                     input_query_queue_prefix="results",
-                    total_queries=5, output_queue="raw_data_queue"
+                    total_queries=1, output_exchange="gateway_exc"
                     )
         system = system | gateway
 
-        # Create data
+        # Create USD filters
         prefix, total_instances = _get_next_config_row(config_file_reader)
         usd_filters = get_filters_docker_services(prefix, total_instances,
                                                 "Payment Currency", "US Dollar", "eq",
-                                                input_queue="cleanded_data_queue",
+                                                input_exchange="gateway_exc",
                                                 output_exchange="usd_transactions_exc",
                                                 )
         system = system | usd_filters
