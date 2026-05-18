@@ -4,9 +4,11 @@ import csv
 import socket
 import signal
 import time
+import json
 
 from common import message_protocol
 
+TOTAL_QUERIES = 1
 BATCH_SIZE = 50
 ACCOUNTS_INPUT_FILE = os.environ["ACCOUNTS_INPUT_FILE"]
 TRANSACTIONS_INPUT_FILE = os.environ["TRANSACTIONS_INPUT_FILE"]
@@ -31,19 +33,40 @@ class Client:
         if self._prev_sigterm_handler:
             self._prev_sigterm_handler(signum, frame)
 
+    def open_output_files(self):
+        self.q1_results = open("q1.json", "w")
+
+    def close_output_files(self):
+        self.q1_results.close()
+
     def connect(self, server_host, server_port):
         while True:
             try:
                 self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.server_socket.connect((server_host, server_port))
-                time.sleep(RECONNECTION_TIME_SECS)
             except:
-                continue
+                time.sleep(RECONNECTION_TIME_SECS)
 
     def disconnect(self):
         if self.server_socket:
             self.server_socket.shutdown(socket.SHUT_RDWR)
 
+    def _store_results_from_batch(output_file, batch):
+        for result in batch:
+            json.dump(result, output_file)
+
+    def _store_query_results(self, msg_type, batch):
+        if msg_type == message_protocol.external.MsgType.Q1_RESULTS_BATCH:
+            self._store_results_from_batch(self.q1_results, batch)
+
+    def _recv_ack(self):
+        while True:
+            msg_type, values = message_protocol.external.recv_msg(self.server_socket)
+
+            if msg_type == message_protocol.external.MsgType.ACK:
+                break
+            else:
+                self._store_query_results(msg_type, values)
 
     def _send_csv_data_batches(self, csv_input_file, data_type, data_preparation_func):
         with open(csv_input_file, newline="\n") as input_file:
@@ -63,7 +86,7 @@ class Client:
                         batch
                     )
                     batch.clear()
-                    message_protocol.external.recv_msg(self.server_socket)
+                    self._recv_ack()
 
             # Check if remaining data is left
             if len(batch) > 0:
@@ -73,7 +96,7 @@ class Client:
                     batch
                 )
                 batch.clear()
-                message_protocol.external.recv_msg(self.server_socket)
+                self._recv_ack()
 
 
     def _get_next_account(self, row):
@@ -93,7 +116,8 @@ class Client:
         message_protocol.external.send_msg(
             self.server_socket, message_protocol.external.MsgType.END_OF_RECORDS
         )
-        message_protocol.external.recv_msg(self.server_socket)
+        self._recv_ack()
+        logging.info("Accounts batch sent")
 
 
     def _get_next_transaction(self, row):
@@ -114,11 +138,20 @@ class Client:
         message_protocol.external.send_msg(
             self.server_socket, message_protocol.external.MsgType.END_OF_RECORDS
         )
-        message_protocol.external.recv_msg(self.server_socket)
+        self._recv_ack()
 
-    def recv_queries_results(self, output_file):
+        logging.info("Transactions batch sent")
+
+    def recv_queries_results(self):
         logging.info("Receiving results...")
-        raise Exception("TODO: Receive queries results")
+        while True:
+            msg_type, values = message_protocol.external.recv_msg(self.server_socket)
+
+            if msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
+                break
+            else:
+                logging.info("Query results arrived")
+                self._store_query_results(msg_type, values)
 
 
 def main() -> int:
@@ -129,7 +162,7 @@ def main() -> int:
         client.connect(SERVER_HOST, SERVER_PORT)
         client.send_bank_accounts_information(ACCOUNTS_INPUT_FILE)
         client.send_transactions_records(TRANSACTIONS_INPUT_FILE)
-        #client.recv_queries_results(OUTPUT_FILE)
+        client.recv_queries_results(OUTPUT_FILE)
     except socket.error:
         if not client.closed:
             logging.error("The connection with the server was lost")

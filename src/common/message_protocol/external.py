@@ -14,6 +14,7 @@ class MsgType(enum.IntEnum):
     WAIT = enum.auto()                  # Wait for gateway to process batch
     CHECK = enum.auto()                 # Ask gateway if batch is processed
     END_OF_RECORDS = enum.auto()        # Signal no more records to send
+    Q1_RESULTS_BATCH = enum.auto()      # Results batch for query 1
 
 
 # Receiving
@@ -110,6 +111,33 @@ def _recv_accounts_batch(socket):
     return batch
 
 
+def _recv_q1_results_batch(socket):
+    batch_size = external_serializer.deserialize_uint16(
+        _recv_sized(socket, external_serializer.UINT16_SIZE)
+    )
+
+    batch = []
+    for i in range(batch_size):
+        # Origin account
+        origin_bank = external_serializer.deserialize_uint32(
+            _recv_sized(socket, external_serializer.UINT32_SIZE)
+        )
+        origin_acc = _deserialize_string(socket)
+    
+        # Desination account
+        dest_bank = external_serializer.deserialize_uint32(
+            _recv_sized(socket, external_serializer.UINT32_SIZE)
+        )
+        dest_acc = _deserialize_string(socket)
+
+        # Get amount paid
+        amount_paid = _deserialize_string(socket)
+
+        batch.append([origin_bank, origin_acc, dest_bank, dest_acc, amount_paid])
+
+    return batch
+
+
 def _recv_empty(socket):
     return None
 
@@ -119,6 +147,7 @@ RECV_MSG_HANDLERS = {
     MsgType.ACCOUNT_BATCH: _recv_accounts_batch,
     MsgType.ACK: _recv_empty,
     MsgType.END_OF_RECORDS: _recv_empty,
+    MsgType.Q1_RESULTS_BATCH: _recv_q1_results_batch,
 }
 
 
@@ -198,6 +227,22 @@ def _send_accounts_batch(socket, batch):
     socket.sendall(msg)
 
 
+## Q1 results
+def _send_q1_results_batch(origin_bank, origin_acc, dest_bank, dest_acc, amount_paid):
+    return b"".join(
+        [
+            external_serializer.serialize_uint32(int(origin_bank)),
+            external_serializer.serialize_uint8(len(origin_acc)),
+            external_serializer.serialize_string(origin_acc),
+            external_serializer.serialize_uint32(int(dest_bank)),
+            external_serializer.serialize_uint8(len(dest_acc)),
+            external_serializer.serialize_string(dest_acc),
+            external_serializer.serialize_uint8(len(amount_paid)),
+            external_serializer.serialize_string(amount_paid),
+        ]
+    )
+
+
 ## ACK
 def _send_ack(socket):
     socket.sendall(external_serializer.serialize_uint8(MsgType.ACK))
@@ -214,6 +259,7 @@ SEND_MSG_HANDLERS = {
     MsgType.ACCOUNT_BATCH: _send_accounts_batch,
     MsgType.ACK: _send_ack,
     MsgType.END_OF_RECORDS: _send_end_of_records,
+    MsgType.Q1_RESULTS_BATCH: _send_q1_results_batch,
 }
 
 
