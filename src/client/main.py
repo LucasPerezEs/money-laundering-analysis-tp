@@ -3,6 +3,7 @@ import logging
 import csv
 import socket
 import signal
+import time
 
 from common import message_protocol
 
@@ -13,6 +14,8 @@ OUTPUT_FILE = os.environ["OUTPUT_FILE"]
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 
+
+RECONNECTION_TIME_SECS = 0.5
 
 class Client:
 
@@ -33,7 +36,7 @@ class Client:
             try:
                 self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.server_socket.connect((server_host, server_port))
-                break
+                time.sleep(RECONNECTION_TIME_SECS)
             except:
                 continue
 
