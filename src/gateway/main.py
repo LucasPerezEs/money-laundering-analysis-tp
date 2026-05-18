@@ -16,6 +16,10 @@ OUTPUT_EXCHANGE = os.environ.get("OUTPUT_EXCHANGE", "")
 
 TOTAL_QUERIES = os.environ["TOTAL_QUERIES"]
 
+POSSIBLE_QUERIES = {
+    0: message_protocol.external.MsgType.Q1_RESULTS_BATCH,
+}
+
 def handle_client_request(client_socket, message_handler):
     # Client's state
     output_queue = None
@@ -106,12 +110,7 @@ def handle_client_response(client_list, query_number):
                     client_index += 1
                     continue
 
-                message_protocol.external.send_msg(
-                    client_socket,
-                    message_protocol.external.MsgType.FRUIT_TOP,
-                    deserialized_message,
-                )
-                message_protocol.external.recv_msg(client_socket)
+                print("TODO: Envío de datos procesados al cliente")
                 break
             client_list.pop(client_index)
             ack()
