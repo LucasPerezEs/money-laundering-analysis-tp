@@ -3,6 +3,7 @@ import logging
 import os
 import signal
 import socket
+import time
 
 from common import message_protocol
 
@@ -40,8 +41,19 @@ class Client:
             self._prev_sigterm_handler(signum, frame)
 
     def connect(self):
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.connect((self.server_host, self.server_port))
+        attempts = 0
+        while True:
+            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                self.server_socket.connect((self.server_host, self.server_port))
+                return
+            except socket.error:
+                self.server_socket.close()
+                attempts += 1
+                if attempts >= 10:
+                    raise
+                logging.warning("Gateway not ready, retrying...")
+                time.sleep(1)
 
     def disconnect(self):
         if not self.server_socket:
@@ -66,12 +78,15 @@ class Client:
             raise TypeError(f"Expected ACK, got {msg_type}")
         if payload != self.client_id:
             raise ValueError("Client id mismatch in ACK")
+        
+        logging.info("Received ACK from gateway")
 
     def _send_rows_in_batches(self, rows, msg_type):
         batch = []
         for row in rows:
             batch.append(row)
             if len(batch) >= self.batch_size:
+                logging.info(f"Sending batch of {len(batch)} rows to gateway")
                 message_protocol.external.send_msg(
                     self.server_socket, msg_type, self.client_id, batch
                 )
@@ -79,6 +94,7 @@ class Client:
                 batch = []
 
         if batch:
+            logging.info(f"Sending final batch of {len(batch)} rows to gateway")
             message_protocol.external.send_msg(
                 self.server_socket, msg_type, self.client_id, batch
             )
@@ -94,6 +110,7 @@ class Client:
                 rows, message_protocol.external.MsgType.ACCOUNTS_BATCH
             )
 
+        logging.info("Finished sending accounts")
         message_protocol.external.send_msg(
             self.server_socket,
             message_protocol.external.MsgType.END_ACCOUNTS,
@@ -110,6 +127,7 @@ class Client:
                 rows, message_protocol.external.MsgType.TRANSACTIONS_BATCH
             )
 
+        logging.info("Finished sending transactions")
         message_protocol.external.send_msg(
             self.server_socket,
             message_protocol.external.MsgType.END_TRANSACTIONS,
@@ -129,6 +147,8 @@ class Client:
                 msg_client_id, query_id, rows = payload
                 if msg_client_id != self.client_id:
                     raise ValueError("Client id mismatch in query result batch")
+
+                logging.info(f"Received batch of {len(rows)} rows for query {query_id} from gateway")
 
                 if query_id not in self._writers:
                     file_path = os.path.join(
@@ -150,6 +170,9 @@ class Client:
                 msg_client_id, query_id = payload
                 if msg_client_id != self.client_id:
                     raise ValueError("Client id mismatch in end query")
+                
+                logging.info(f"Received end of results for query {query_id} from gateway")
+                
                 if query_id in self._writers:
                     csvfile, _ = self._writers.pop(query_id)
                     csvfile.close()
@@ -163,6 +186,9 @@ class Client:
             if msg_type == message_protocol.external.MsgType.END_RESULTS:
                 if payload != self.client_id:
                     raise ValueError("Client id mismatch in end results")
+                
+                logging.info(f"Received end of all results from gateway for client {self.client_id}")
+                
                 message_protocol.external.send_msg(
                     self.server_socket,
                     message_protocol.external.MsgType.ACK,

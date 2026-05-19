@@ -9,7 +9,7 @@ CONFIG_FILE = "filter_config.yaml"
 DOCKER_BUILD_SECTION_NAME = "build"
 DOCKER_BUILD_CONTEXT_SUBSECTION_NAME = "context"
 
-CONTEXT_FOLDER = "./src/filter"
+CONTEXT_FOLDER = "./src"
 
 # Container name
 CONTAINER_NAME_TAG = "container_name"
@@ -60,6 +60,7 @@ def get_filters_docker_services(service_prefix, total_instances, filter_field,
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{INPUT_QUEUE_TAG}={input_queue}")
         elif input_exchange is not None:
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{INPUT_EXCHANGE_TAG}={input_exchange}")
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"SHARD_ID={i}")
 
         if output_queue is not None:
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_QUEUE_TAG}={output_queue}")

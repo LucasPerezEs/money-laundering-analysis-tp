@@ -34,6 +34,8 @@ class DataReducer(WorkerBase):
         
         if not self.keep_columns:
             raise RuntimeError("KEEP_COLUMNS está vacía")
+        
+        logger.info(f"DataReducer initialized with keep_columns: {self.keep_columns}")
 
         super().__init__()
 
@@ -44,6 +46,7 @@ class DataReducer(WorkerBase):
 
         # Si alguna clave no existe, propagamos KeyError para que WorkerBase pueda manejarla
         reduced = {k: data[k] for k in self.keep_columns}
+        logger.info(f"Reducing data {data} to {reduced}")
         return [reduced]
 
     def on_eof(self):
