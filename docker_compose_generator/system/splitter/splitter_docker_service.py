@@ -26,13 +26,15 @@ OUTPUT_EXCHANGE_TAG = "OUTPUT_EXCHANGE"
 SHARD_KEY_FIELD_TAG = "SHARD_KEY_FIELD"
 SHARD_KEY_FIELDS_TAG = "SHARD_KEY_FIELDS"
 TAG_SOURCE_TAG = "TAG_SOURCE"
+TOTAL_CLIENTS_TAG = "TOTAL_CLIENTS"
 
 
 def get_splitter_docker_services(service_prefix, total_instances,
                                input_queue=None, input_exchange=None,
                                output_queue=None, output_exchange=None,
                                key_field=None, key_fields=None,
-                               source_tag=None):
+                               source_tag=None,
+                               total_clients=0):
     
     # Open config file
     with open(CONFIG_FILE, "r") as config_file:
@@ -75,6 +77,9 @@ def get_splitter_docker_services(service_prefix, total_instances,
 
         if source_tag is not None:
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{TAG_SOURCE_TAG}={source_tag}")
+
+        if total_clients > 0:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{TOTAL_CLIENTS_TAG}={total_clients}")
 
         # Add service in services dictionary
         splitter_services[new_service_name] = new_service_config

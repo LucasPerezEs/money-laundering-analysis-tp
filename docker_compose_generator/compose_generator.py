@@ -31,7 +31,7 @@ def generate_docker_compose_file(
     services = {}
 
     # Create system
-    system_services = generate_system_docker_compose()
+    system_services = generate_system_docker_compose(total_clients=total_clients)
     services = services | system_services
 
     # Create clients

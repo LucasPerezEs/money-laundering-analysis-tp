@@ -169,6 +169,13 @@ class FilterWorker(WorkerBase):
 
     def process(self, data: dict):
         """Recibe fila dict. Devuelve [data] si cumple, [] si no. Lanza errores para WorkerBase."""
+        
+        if not isinstance(data, dict):
+            raise TypeError("Se esperaba dict como input para el filtro")
+        
+        if "client_id" not in data:
+            logger.warning("client_id no encontrado en data")
+        
         target = _extract_target(data, self.filter_field_key)
 
         # date-range matching (requires FILTER_OP == 'in' by init check)
