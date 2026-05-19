@@ -9,7 +9,7 @@ CONFIG_FILE = "data_reducer_config.yaml"
 DOCKER_BUILD_SECTION_NAME = "build"
 DOCKER_BUILD_CONTEXT_SUBSECTION_NAME = "context"
 
-CONTEXT_FOLDER = "./src/data_cleaner"
+CONTEXT_FOLDER = "./src"
 
 # Container name
 CONTAINER_NAME_TAG = "container_name"
@@ -66,7 +66,10 @@ def get_data_reducer_docker_services(service_prefix, total_instances, columns_ke
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_EXCHANGE_TAG}={output_exchange}")
         
         # Columns to keep
-        new_service_config[DOCKER_ENV_VARS_NAME].append(f"{KEEP_COLUMNS_TAG}={",".join(columns_kept)}")
+        keep_columns_value = ",".join(columns_kept)
+        new_service_config[DOCKER_ENV_VARS_NAME].append(
+            f"{KEEP_COLUMNS_TAG}={keep_columns_value}"
+        )
 
         # Add service in services dictionary
         data_cleaner_services[new_service_name] = new_service_config

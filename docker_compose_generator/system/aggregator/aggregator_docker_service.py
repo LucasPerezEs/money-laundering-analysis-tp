@@ -77,7 +77,10 @@ def get_aggregator_docker_services(service_prefix, total_instances,
         if key_field is not None:
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{KEY_FIELD_TAG}={key_field}")
         if carry_fields is not None:
-            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{CARRY_FIELDS_TAG}={",".join(carry_fields)}")
+            carry_fields_value = ",".join(carry_fields)
+            new_service_config[DOCKER_ENV_VARS_NAME].append(
+                f"{CARRY_FIELDS_TAG}={carry_fields_value}"
+            )
         if output_tag is not None:
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_TAG_TAG}={output_tag}")
 
