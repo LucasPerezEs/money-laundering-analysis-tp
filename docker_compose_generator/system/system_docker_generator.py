@@ -13,7 +13,7 @@ def _get_next_config_row(config_file):
     row = next(config_file)
     return row["prefix"], int(row["total_instances"])
 
-def generate_system_docker_compose():
+def generate_system_docker_compose(total_clients=0):
     system = {}
 
     # Create rabbitmq
@@ -41,6 +41,7 @@ def generate_system_docker_compose():
                                                 "Payment Currency", "US Dollar", "eq",
                                                 input_queue="gateway_data",
                                                 output_queue="usd_transactions",
+                                                total_clients=total_clients,
                                                 )
         system = system | usd_filters
 
@@ -52,6 +53,7 @@ def generate_system_docker_compose():
                                                             ["From Bank", "Account", "To Bank", "Account.1", "Amount Paid"],
                                                             input_queue="usd_transactions",
                                                             output_queue="q1_reduced_data",
+                                                            total_clients=total_clients,
                                                             )
         system = system | data_reducers_q1
 
@@ -61,6 +63,7 @@ def generate_system_docker_compose():
                                                         "Amount Paid", 50, "lt",
                                                         input_queue="q1_reduced_data",
                                                         output_queue="results_1",
+                                                        total_clients=total_clients,
                                                         )
         system = system | q1_50_usd_filters
 

@@ -20,6 +20,27 @@ services:
     volumes:
     - ./datasets:/datasets
     - ./results:/results
+  client_1:
+    build:
+      context: ./src
+      dockerfile: client/Dockerfile
+    container_name: client_1
+    depends_on:
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - SERVER_HOST=gateway
+    - SERVER_PORT=7659
+    - BATCH_SIZE=500
+    - TRANSACTIONS_FILE=/datasets/transactions_medium_reduced.csv
+    - ACCOUNTS_FILE=/datasets/accounts_medium_reduced.csv
+    - CLIENT_ID=1
+    - RESULTS_DIR=/results
+    volumes:
+    - ./datasets:/datasets
+    - ./results:/results
   gateway:
     build:
       context: ./src
@@ -49,6 +70,7 @@ services:
     - INPUT_QUEUE=usd_transactions
     - OUTPUT_QUEUE=q1_reduced_data
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
+    - TOTAL_CLIENTS=2
   q1_filter_lt_50_usd_0:
     build:
       context: ./src
@@ -65,6 +87,7 @@ services:
     - FILTER_FIELD=Amount Paid
     - FILTER_OP=lt
     - FILTER_VALUE=50
+    - TOTAL_CLIENTS=2
   rabbitmq:
     build:
       context: ./src/rabbitmq
@@ -97,3 +120,4 @@ services:
     - FILTER_FIELD=Payment Currency
     - FILTER_OP=eq
     - FILTER_VALUE=US Dollar
+    - TOTAL_CLIENTS=2

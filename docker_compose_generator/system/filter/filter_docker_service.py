@@ -27,11 +27,13 @@ OUTPUT_EXCHANGE_TAG = "OUTPUT_EXCHANGE"
 FILTER_FIELD_TAG = "FILTER_FIELD"
 FILTER_OP_TAG = "FILTER_OP"
 FILTER_VALUE_TAG = "FILTER_VALUE"
+TOTAL_CLIENTS_TAG = "TOTAL_CLIENTS"
 
 def get_filters_docker_services(service_prefix, total_instances, filter_field,
                                filter_value, filter_op="eq",
                                input_queue=None, input_exchange=None,
-                               output_queue=None, output_exchange=None):
+                               output_queue=None, output_exchange=None,
+                               total_clients=0):
     
     # Open config file
     base_path = os.path.dirname(__file__)
@@ -71,6 +73,9 @@ def get_filters_docker_services(service_prefix, total_instances, filter_field,
         new_service_config[DOCKER_ENV_VARS_NAME].append(f"{FILTER_FIELD_TAG}={filter_field}")
         new_service_config[DOCKER_ENV_VARS_NAME].append(f"{FILTER_OP_TAG}={filter_op}")
         new_service_config[DOCKER_ENV_VARS_NAME].append(f"{FILTER_VALUE_TAG}={filter_value}")
+
+        if total_clients > 0:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{TOTAL_CLIENTS_TAG}={total_clients}")
 
         # Add service in services dictionary
         filter_services[new_service_name] = new_service_config

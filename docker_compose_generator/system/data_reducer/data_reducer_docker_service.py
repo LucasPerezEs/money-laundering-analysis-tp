@@ -27,10 +27,12 @@ OUTPUT_EXCHANGE_TAG = "OUTPUT_EXCHANGE"
 
 ## Columns kept
 KEEP_COLUMNS_TAG = "KEEP_COLUMNS"
+TOTAL_CLIENTS_TAG = "TOTAL_CLIENTS"
 
 def get_data_reducer_docker_services(service_prefix, total_instances, columns_kept,
                                     input_queue=None, input_exchange=None,
-                                    output_queue=None, output_exchange=None):
+                                    output_queue=None, output_exchange=None,
+                                    total_clients=0):
     base_path = os.path.dirname(__file__)
     config_file_path = os.path.join(base_path, CONFIG_FILE)
 
@@ -70,6 +72,9 @@ def get_data_reducer_docker_services(service_prefix, total_instances, columns_ke
         new_service_config[DOCKER_ENV_VARS_NAME].append(
             f"{KEEP_COLUMNS_TAG}={keep_columns_value}"
         )
+
+        if total_clients > 0:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{TOTAL_CLIENTS_TAG}={total_clients}")
 
         # Add service in services dictionary
         data_cleaner_services[new_service_name] = new_service_config

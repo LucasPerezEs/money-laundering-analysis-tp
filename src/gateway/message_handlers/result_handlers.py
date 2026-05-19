@@ -44,6 +44,12 @@ def _normalize_result_rows(rows, query_id, bank_maps, client_id):
             row = dict(row)
             row.pop("client_id", None)
 
+        if isinstance(row, dict) and "client_id" in row:
+            if row["client_id"] != client_id:
+                logging.warning(
+                    f"Row client_id {row['client_id']} does not match expected client_id {client_id}"
+                )
+
         if isinstance(row, dict):
             row_values = list(row.values())
         else:
@@ -165,6 +171,7 @@ def handle_client_response(
             if normalized_rows:
                 with send_lock:
                     client_socket = client_sockets.get(client_id)
+                    logging.info(f"Sending {len(normalized_rows)} rows for query {query_id} to client {client_id}")
                     if client_socket:
                         message_protocol.external.send_msg(
                             client_socket,

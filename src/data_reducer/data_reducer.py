@@ -48,6 +48,9 @@ class DataReducer(WorkerBase):
         reduced = {k: data[k] for k in self.keep_columns}
         if "client_id" in data:
             reduced["client_id"] = data["client_id"]
+        else:
+            logger.warning("client_id no encontrado en data, no se incluirá en el resultado reducido")
+        
         logger.info(f"Reducing data {data} to {reduced}")
         return [reduced]
 
