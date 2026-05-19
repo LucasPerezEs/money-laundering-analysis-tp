@@ -46,6 +46,8 @@ class DataReducer(WorkerBase):
 
         # Si alguna clave no existe, propagamos KeyError para que WorkerBase pueda manejarla
         reduced = {k: data[k] for k in self.keep_columns}
+        if "client_id" in data:
+            reduced["client_id"] = data["client_id"]
         logger.info(f"Reducing data {data} to {reduced}")
         return [reduced]
 
