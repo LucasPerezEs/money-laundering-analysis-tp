@@ -55,6 +55,9 @@ class PathsCreator(WorkerBase):
                 outgoing_edges[origin] = set()
             outgoing_edges[origin].add(destination)
 
+        return []
+
+
     # Process EOF
     def on_eof(self, client_id=None):
         logging.info("EOF recibido")

@@ -24,11 +24,13 @@ class UniquePathsCounter(WorkerBase):
     def __init__(self):
         super().__init__()
         # Create storage for intermediate nodes
-        self.intermediate_nodes = {}
+        self.intermediate_nodes_by_client_id = {}
 
     # Process data message
-    def process(self, transaction):
-        logging.info("Batch de datos recibido")
+    def process(self, data):
+        # Get paths counter
+        client_id = data["client_id"]
+        intermediate_nodes = self.edges_by_client_id.get(client_id, {})
 
         # Path start
         start_node = transaction_id.TransactionID(
@@ -46,17 +48,20 @@ class UniquePathsCounter(WorkerBase):
                         transaction[TRANSACTION_DESTINATION_ACC_KEY])
 
         # Add intermediate node
-        intermediate_accs_set = self.intermediate_nodes.get((start_node, end_node), set())
+        intermediate_accs_set = intermediate_nodes.get((start_node, end_node), set())
         intermediate_accs_set.add(intermediate_node)
 
         logging.info("Batch de datos procesado")
+        return []
+
 
     # Process EOF
     def on_eof(self, client_id=None):
         logging.info("EOF recibido")
+        intermediate_nodes = self.edges_by_client_id.get(client_id, {})
 
         # For each node with incoming edges
-        for (start_node, end_node) in self.intermediate_nodes:
+        for (start_node, end_node) in intermediate_nodes:
             # Get start node ID elements
             start_bank, start_acc = start_node.as_tuple()
 
@@ -69,7 +74,7 @@ class UniquePathsCounter(WorkerBase):
                 TRANSACTION_ORIGIN_ACC_KEY : start_acc,
                 TRANSACTION_DESTINATION_BANK_KEY : end_bank,
                 TRANSACTION_DESTINATION_ACC_KEY : end_acc,
-                TOTAL_PATHS_KEY : len(self.intermediate_nodes[(start_node, end_node)]),
+                TOTAL_PATHS_KEY : len(intermediate_nodes[(start_node, end_node)]),
                 }
             
         logging.info("EOF procesado: datos enviados")
