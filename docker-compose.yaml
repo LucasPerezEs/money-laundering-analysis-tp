@@ -54,9 +54,11 @@ services:
     - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
     - SERVER_PORT=7659
-    - OUTPUT_QUEUE=gateway_data
+    - OUTPUT_EXCHANGE=gateway_exc
     - INPUT_QUEUE_PREFIX=results
     - TOTAL_QUERIES=1
+    - OUTPUT_SHARDS=2
+    - QUERY_1_N_UPSTREAM=2
     - TRANSACTION_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1,Amount Received,Receiving
       Currency,Amount Paid,Payment Currency,Payment Format
   q1_data_reducer_0:
@@ -69,11 +71,11 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
+    - N_UPSTREAM=2
     - INPUT_EXCHANGE=usd_transactions_exc
     - SHARD_ID=0
     - OUTPUT_EXCHANGE=q1_reduced_exc
-    - OUTPUT_SHARDS=1
+    - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
     - TOTAL_CLIENTS=2
   q1_data_reducer_1:
@@ -86,27 +88,63 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
+    - N_UPSTREAM=2
     - INPUT_EXCHANGE=usd_transactions_exc
     - SHARD_ID=1
     - OUTPUT_EXCHANGE=q1_reduced_exc
-    - OUTPUT_SHARDS=1
+    - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
     - TOTAL_CLIENTS=2
-  q1_filter_lt_50_usd_0:
+  q1_data_reducer_2:
+    build:
+      context: ./src
+      dockerfile: data_reducer/Dockerfile
+    container_name: q1_data_reducer_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - RABBITMQ_HOST=rabbitmq
+    - N_UPSTREAM=2
+    - INPUT_EXCHANGE=usd_transactions_exc
+    - SHARD_ID=2
+    - OUTPUT_EXCHANGE=q1_reduced_exc
+    - OUTPUT_SHARDS=2
+    - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
+    - TOTAL_CLIENTS=2
+  q1_filter_lt_50_0:
     build:
       context: ./src
       dockerfile: filters/Dockerfile
-    container_name: q1_filter_lt_50_usd_0
+    container_name: q1_filter_lt_50_0
     depends_on:
       rabbitmq:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=1
-    - N_UPSTREAM=2
+    - N_UPSTREAM=3
     - INPUT_EXCHANGE=q1_reduced_exc
     - SHARD_ID=0
+    - OUTPUT_QUEUE=results_1
+    - FILTER_FIELD=Amount Paid
+    - FILTER_OP=lt
+    - FILTER_VALUE=50
+    - TOTAL_CLIENTS=2
+  q1_filter_lt_50_1:
+    build:
+      context: ./src
+      dockerfile: filters/Dockerfile
+    container_name: q1_filter_lt_50_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - RABBITMQ_HOST=rabbitmq
+    - N_UPSTREAM=1
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q1_reduced_exc
+    - SHARD_ID=1
     - OUTPUT_QUEUE=results_1
     - FILTER_FIELD=Amount Paid
     - FILTER_OP=lt
@@ -140,9 +178,30 @@ services:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=1
     - N_UPSTREAM=1
-    - INPUT_QUEUE=gateway_data
+    - INPUT_EXCHANGE=gateway_exc
+    - SHARD_ID=0
     - OUTPUT_EXCHANGE=usd_transactions_exc
-    - OUTPUT_SHARDS=2
+    - OUTPUT_SHARDS=3
+    - FILTER_FIELD=Payment Currency
+    - FILTER_OP=eq
+    - FILTER_VALUE=US Dollar
+    - TOTAL_CLIENTS=2
+  usd_filter_1:
+    build:
+      context: ./src
+      dockerfile: filters/Dockerfile
+    container_name: usd_filter_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - RABBITMQ_HOST=rabbitmq
+    - N_UPSTREAM=1
+    - N_UPSTREAM=1
+    - INPUT_EXCHANGE=gateway_exc
+    - SHARD_ID=1
+    - OUTPUT_EXCHANGE=usd_transactions_exc
+    - OUTPUT_SHARDS=3
     - FILTER_FIELD=Payment Currency
     - FILTER_OP=eq
     - FILTER_VALUE=US Dollar

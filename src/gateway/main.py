@@ -55,6 +55,7 @@ def main():
 
     # Lanzamos handlers de resultados
     for index, queue_name in enumerate(result_queues, start=1):
+        n_upstream = int(os.environ.get(f"QUERY_{index}_N_UPSTREAM", "1"))
         t = threading.Thread(
             target=result_handlers.handle_client_response,
             kwargs={
@@ -66,7 +67,8 @@ def main():
                 "mom_host": MOM_HOST,
                 "query_id": index,
                 "total_queries": TOTAL_QUERIES,
-                "send_lock": send_lock
+                "send_lock": send_lock,
+                "n_upstream": n_upstream
             }
         )
 

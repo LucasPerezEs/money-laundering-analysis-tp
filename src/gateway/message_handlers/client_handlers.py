@@ -4,6 +4,9 @@ import socket
 
 from message_handlers import message_handler
 from common import middleware, message_protocol
+import random                         
+import os   
+from common.middleware.middleware_sharded import ShardedExchangeProducer 
 
 def _update_bank_map(bank_maps, client_id, rows):
     bank_map = dict(bank_maps.get(client_id, {}))
@@ -27,13 +30,13 @@ def _rows_to_transactions(client_id, rows, transaction_columns):
     return transactions
 
 
-def _build_output_queue(mom_host, output_queue, output_exchange):
-    if output_queue != "":
+from common.middleware.middleware_sharded import ShardedExchangeProducer
+
+def _build_output_queue(mom_host, output_queue, output_exchange, output_shards=1):
+    if output_queue:
         return middleware.MessageMiddlewareQueueRabbitMQ(mom_host, output_queue)
-    if output_exchange != "":
-        return middleware.MessageMiddlewareExchangeRabbitMQ(
-            mom_host, output_exchange, ["gateway_data", "eof"]
-        )
+    if output_exchange:
+        return ShardedExchangeProducer(mom_host, output_exchange, output_shards)
     raise Exception("FATAL: no output given for data processing")
 
 
@@ -49,11 +52,11 @@ def handle_client_request(
 ):
     handler = message_handler.MessageHandler()
     client_id = None
-    output = None
+    output_shards = int(os.environ.get("OUTPUT_SHARDS", "1"))
+    output = _build_output_queue(mom_host, output_queue, output_exchange, output_shards)
 
     try:
         client_socket.setblocking(True)
-        
         while True:
             try:
                 msg_type, payload = message_protocol.external.recv_msg(client_socket)
@@ -112,7 +115,13 @@ def handle_client_request(
                 serialized_message = handler.serialize_rows_message(
                     client_id, transactions
                 )
-                output.send(serialized_message)
+                
+                if isinstance(output, ShardedExchangeProducer):
+                    shard = random.randint(0, output_shards - 1)
+                    output.send_to_shard(serialized_message, shard)
+                else:
+                    output.send(serialized_message)
+
                 message_protocol.external.send_msg(
                     client_socket,
                     message_protocol.external.MsgType.ACK,
@@ -132,7 +141,10 @@ def handle_client_request(
                 elif msg_client_id != client_id:
                     raise ValueError("Client id mismatch in end transactions")
                 serialized_message = handler.serialize_eof_message(client_id)
-                output.send(serialized_message)
+                if isinstance(output, ShardedExchangeProducer):
+                    output.send_eof_to_all(serialized_message)
+                else:
+                    output.send(serialized_message)
                 message_protocol.external.send_msg(
                     client_socket,
                     message_protocol.external.MsgType.ACK,

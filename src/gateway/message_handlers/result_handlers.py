@@ -104,8 +104,10 @@ def handle_client_response(
     client_ready,
     total_queries,
     send_lock,
+    n_upstream,  
 ):
     logging.basicConfig(level=logging.INFO)
+    eof_count = {}  
     input_queue = middleware.MessageMiddlewareQueueRabbitMQ(mom_host, queue_name)
     handler = message_handler.MessageHandler()
 
@@ -122,16 +124,22 @@ def handle_client_response(
                     time.sleep(0.2)
                     nack()
                     return
-                logging.info(f"Received EOF for query {query_id} from client {client_id}")
-                _handle_query_eof(
-                    client_id,
-                    query_id,
-                    client_sockets,
-                    client_query_eofs,
-                    total_queries,
-                    send_lock,
-                )
+
+                # Contar EOFs de este cliente para esta query
+                eof_count[client_id] = eof_count.get(client_id, 0) + 1
+                logging.info(f"Received EOF for query {query_id} from client {client_id} ({eof_count[client_id]}/{n_upstream})")
                 ack()
+
+                # Solo cuando hayamos recibido todos los EOFs de las instancias upstream
+                if eof_count[client_id] >= n_upstream:
+                    _handle_query_eof(
+                        client_id,
+                        query_id,
+                        client_sockets,
+                        client_query_eofs,
+                        total_queries,
+                        send_lock,
+                    )
                 return
 
             if isinstance(payload, dict):
