@@ -1,0 +1,10 @@
+build:
+  context: ./src
+  dockerfile: money_converter/Dockerfile
+container_name: money_converter_api_client
+entrypoint:
+- python3
+- 
+environment:
+- MOM_HOST=rabbitmq
+- PYTHONUNBUFFERED=1

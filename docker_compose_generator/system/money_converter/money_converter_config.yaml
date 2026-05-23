@@ -1,0 +1,7 @@
+build:
+  context: ./src
+  dockerfile: money_converter/Dockerfile
+container_name: money_converter_worker
+environment:
+- MOM_HOST=rabbitmq
+- PYTHONUNBUFFERED=1

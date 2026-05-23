@@ -1,5 +1,6 @@
 from common.middleware.double_io_worker_base import WorkerBaseDoubleIO
 
+import logging
 import os
 
 class BarrierFilter(WorkerBaseDoubleIO):
@@ -41,3 +42,9 @@ class BarrierFilter(WorkerBaseDoubleIO):
                     transaction["Account"],
                     transaction["Amount Paid"]
                 }
+
+
+if __name__ == "__main__":
+    logging.basicConfig(filename=__file__, level=logging.INFO)
+    barrier_filter = BarrierFilter()
+    barrier_filter.start()

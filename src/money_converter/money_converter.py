@@ -1,16 +1,8 @@
 import os
-import multiprocessing
 
 from common.middleware.double_io_worker_base import WorkerBaseDoubleIO
-from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
-from common.message_protocol import internal
 
 TARGET_CURRENCY_TAG = "TARGET_CURRENCY"
-CONVERSION_API_REQUESTS = "CONVERSION_API_REQUESTS"
-INPUT_REQ_QUEUE_TAG = "INPUT_REQ_QUEUE"
-CONVERSOR_ID_TAG = "CONVERSOR_ID"
-CONVERTER_PREFIX = os.environ["CONVERTER_PREFIX"]
-RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 
 CURRENCY_CODES = {
     "US Dollar": "USD", "Euro": "EUR", "Yuan": "CNY",
@@ -27,9 +19,6 @@ class MoneyConverter(WorkerBaseDoubleIO):
 
         # Get environment variables
         self._target_currency = os.environ[TARGET_CURRENCY_TAG]
-        self._conversor_api_channel = os.environ[CONVERSION_API_REQUESTS]
-        self._input_reqs_queue = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, os.environ[INPUT_REQ_QUEUE_TAG])
-        self._conversor_id = os.environ[CONVERSOR_ID_TAG]
 
         # Currency rates by date
         self._currency_rates_by_date = {}
