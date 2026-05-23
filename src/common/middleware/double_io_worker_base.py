@@ -259,6 +259,35 @@ class WorkerBase:
         else:
             self._sec_producer.send(eof_body)
 
+    def _execute_eof_main_input(self, client_id=None):
+        if self._operation_mode == "PIPELINE":
+            if self._clients_eof_main_input[client_id] >= self.main_n_upstream:
+                for result in self.on_main_input_eof(client_id):
+                    self._emit_results_main_stage([result])
+                self._flush_all_next_stage()
+        else: #For joiner, check if joiner action is necessary
+            if self._clients_eof_main_input[client_id] >= self.main_n_upstream and \
+                    self._clients_eof_sec_input[client_id] >= self.sec_n_upstream:
+                for result in self.on_both_eof_received(client_id):
+                    self._emit_main_output([result])
+                self._flush_all_main_buffer()
+                self._send_main_output_eof(client_id)
+
+    def _execute_eof_sec_input(self, client_id=None):
+        if self._operation_mode == "PIPELINE":
+            if self._clients_eof_sec_input[client_id] >= self.sec_n_upstream:
+                for result in self.on_secondary_input_eof(client_id):
+                    self._emit_sec_output([result])
+                self._flush_all_sec_buffer()
+                self._send_sec_output_eof(client_id)
+        else: # For joiner, check if joiner action is necessary
+            if self._clients_eof_sec_input[client_id] >= self.sec_n_upstream and \
+                    self._clients_eof_main_input[client_id] >= self.main_n_upstream:
+                for result in self.on_both_eof_received(client_id):
+                    self._emit_main_output([result])
+                self._flush_all_main_buffer()
+                self._send_main_output_eof(client_id)
+
     # --- Loop principal ---------------------------------------------------------
 
     def handle_message_main_input(self):
@@ -273,30 +302,15 @@ class WorkerBase:
                         eof_count[0] += 1
                         ack()
                         if eof_count[0] >= self.main_n_upstream:
-                            for result in self.on_eof(None):
-                                self._emit_results_main_stage([result])
-                            self._flush_all_next_stage()
+                            self._execute_eof_main_input(None)
                             self._main_consumer.stop_consuming()
                             logger.info(f"{self.__class__.__name__} terminado")
                         return
 
                     self._clients_eof_main_input[client_id] = self._clients_eof_main_input.get(client_id, 0) + 1
                     ack()
-                    # For pipeline send data to the next stage
-                    if self._operation_mode == "PIPELINE":
-                        if self._clients_eof_main_input[client_id] >= self.main_n_upstream:
-                            for result in self.on_main_input_eof(client_id):
-                                self._emit_results_main_stage([result])
-                            self._flush_all_next_stage()
-                        return
-                    else: #For joiner, check if joiner action is necessary
-                        if self._clients_eof_main_input[client_id] >= self.main_n_upstream and \
-                                self._clients_eof_sec_input[client_id] >= self.sec_n_upstream:
-                            for result in self.on_both_eof_received(client_id):
-                                self._emit_main_output([result])
-                            self._flush_all_main_buffer()
-                            self._send_main_output_eof(client_id)
-                        return
+                    self._execute_eof_main_input(client_id)
+                    return
 
                 else:
                     for row in msg.get("rows", []):
@@ -327,31 +341,15 @@ class WorkerBase:
                         eof_count[0] += 1
                         ack()
                         if eof_count[0] >= self.n_upstream:
-                            for result in self.on_eof(None):
-                                self._emit([result])
-                            self._flush_all()
-                            self._send_eof()
+                            self._execute_eof_sec_input(None)
                             self._sec_consumer.stop_consuming()
                             logger.info(f"{self.__class__.__name__} terminado")
                         return
 
                     self._clients_eof_sec_input[client_id] = self._clients_eof_sec_input.get(client_id, 0) + 1
                     ack()
-                    # For pipeline, send data to next workers
-                    if self._operation_mode == "PIPELINE":
-                        if self._clients_eof_sec_input[client_id] >= self.sec_n_upstream:
-                            for result in self.on_secondary_input_eof(client_id):
-                                self._emit_sec_output([result])
-                            self._flush_all_sec_buffer()
-                            self._send_sec_output_eof(client_id)
-                    else: # For joiner, check if joiner action is necessary
-                        if self._clients_eof_sec_input[client_id] >= self.sec_n_upstream and \
-                                self._clients_eof_main_input[client_id] >= self.main_n_upstream:
-                            for result in self.on_both_eof_received(client_id):
-                                self._emit_main_output([result])
-                            self._flush_all_main_buffer()
-                            self._send_main_output_eof(client_id)
-                        return
+                    self._execute_eof_sec_input(client_id)
+                    return
 
 
                 else:
