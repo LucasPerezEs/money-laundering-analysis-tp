@@ -261,8 +261,7 @@ class WorkerBase:
                         if eof_count[0] >= self.main_n_upstream:
                             for result in self.on_eof(None):
                                 self._emit_results_main_stage([result])
-                            self._flush_all()
-                            self._send_eof()
+                            self._flush_all_next_stage()
                             self._main_consumer.stop_consuming()
                             logger.info(f"{self.__class__.__name__} terminado")
                         return
