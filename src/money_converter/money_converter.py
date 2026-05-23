@@ -1,3 +1,4 @@
+import logging
 import os
 
 from common.middleware.double_io_worker_base import WorkerBaseDoubleIO
@@ -80,3 +81,9 @@ class MoneyConverter(WorkerBaseDoubleIO):
 
     def on_eof(self):
         return []
+    
+if __name__ == "__main__":
+    logger = logging.getLogger(__file__)
+    logger.setLevel(logging.INFO)
+    money_converter = MoneyConverter()
+    money_converter.start()

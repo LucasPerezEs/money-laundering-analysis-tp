@@ -125,34 +125,12 @@ def generate_system_docker_compose(total_clients=0):
         )
         system = system | q2_aggregators
 
+        # =========================================================
+        # QUERY 3
+        # =========================================================
+
+
     return system
-#        # Query 2
-#        ## Reduce data
-#        data_reducers_q2 = get_data_reducer_docker_services("q2_data_reducer", 1,
-#                                                            ["From Bank", "Account", "Amount Paid"],
-#                                                            input_exchange="usd_transactions_exc",
-#                                                            output_queue="q2_reduced_data",
-#                                                            )
-#        system = system | data_reducers_q2
-#
-#        ## Splitter by bank
-#        q2_splitters_by_bank = get_splitter_docker_services("q2_splitter_by_bank", 1,
-#                                                            input_queue="q2_reduced_data",
-#                                                            output_exchange="q2_split_by_bank_exc",
-#                                                            key_field="From Bank",
-#                                                            )
-#        system = system | q2_splitters_by_bank
-#
-#        ## Max aggregator
-#        q2_max_aggregators = get_aggregator_docker_services("q2_max_by_bank", 1,
-#                                                            input_exchange="q2_split_by_bank_exc",
-#                                                            output_queue="results_2",
-#                                                            agg_op="max", agg_field="Amount Paid", key_field="From Bank",
-#                                                            carry_fields=["From Bank", "Account", "Amount Paid"],
-#                                                            )
-#        system = system | q2_max_aggregators
-#
-#
 #        # Query 3
 #        ## Reduce data
 #        data_reducers_q3 = get_data_reducer_docker_services("q3_data_reducer", 1,

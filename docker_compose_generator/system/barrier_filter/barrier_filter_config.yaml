@@ -1,0 +1,9 @@
+build:
+  context: ./src
+  dockerfile: barrier_filter/Dockerfile
+container_name: barrier_filter
+environment:
+- MOM_HOST=rabbitmq
+- PYTHONUNBUFFERED=1
+- OP_MODE=JOINER
+- COEF=0.01

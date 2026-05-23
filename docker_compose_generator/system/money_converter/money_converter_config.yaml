@@ -5,3 +5,4 @@ container_name: money_converter_worker
 environment:
 - MOM_HOST=rabbitmq
 - PYTHONUNBUFFERED=1
+- OP_MODE=PIPELINE
