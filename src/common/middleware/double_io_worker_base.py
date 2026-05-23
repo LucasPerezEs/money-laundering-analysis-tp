@@ -56,7 +56,7 @@ def _wait_for_rabbitmq():
             time.sleep(RECONNECT_DELAY)
 
 
-class WorkerBase:
+class WorkerBaseDoubleIO:
 
     def __init__(self):
         # Input
@@ -145,7 +145,7 @@ class WorkerBase:
     def process_main_input(self, data: dict) -> tuple[list, list]:
         raise NotImplementedError
 
-    def process_secondary_input(self, data: dict, prev_stage_data: dict) -> tuple[list, list]:
+    def process_secondary_input(self, data: dict, prev_stage_data: list) -> list:
         raise NotImplementedError
 
     def on_main_input_eof(self, client_id=None) -> list:

@@ -1,8 +1,7 @@
 import os
-import queue
-import threading
+import multiprocessing
 
-from common.middleware.worker_base import WorkerBase
+from common.middleware.double_io_worker_base import WorkerBaseDoubleIO
 from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 from common.message_protocol import internal
 
@@ -21,7 +20,7 @@ CURRENCY_CODES = {
     "Brazil Real": "BRL", "Rupee": "INR", "Saudi Riyal": "SAR",
 }
 
-class MoneyConverter(WorkerBase):
+class MoneyConverter(WorkerBaseDoubleIO):
 
     def __init__(self):
         super().__init__()
@@ -34,56 +33,61 @@ class MoneyConverter(WorkerBase):
 
         # Currency rates by date
         self._currency_rates_by_date = {}
+        self._current_prev_row_analyzed = 0
 
-        # Thread for requests results
-        self._reqs_results_channel = queue.Queue()
-        self._reqs_responses = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, f"{CONVERTER_PREFIX}_{self._conversor_id}")
-        self._results_thread = threading.Thread(target=self._handle_request_response, args=())
-        self._results_thread.start()
+    def _generate_consult_currency_rate(self, datetime, origin_curr, dest_curr):
+        return {"datetime" : datetime, "origin" : origin_curr, "destination" : dest_curr}
 
-    def _process_req_response(self, data: bytes, ack, nack):
-        response = internal.deserialize(data)
-        self._reqs_results_channel.put(response[2])
-        ack()
+    def process_main_input(self, data: dict) -> tuple[list, list]:
+        # Get data elements
+        data_copy = data.copy()
+        datetime = data["Timestamp"]
+        origin_curr = data["Received Currency"]
+        dest_curr = data["Payment Currency"]
+        currency_rate_req = []
 
-    def _handle_request_response(self):
-        self._reqs_responses.start_consuming(self._process_req_response)
+        if datetime not in self._currency_rates_by_date or \
+                (origin_curr, dest_curr) not in self._currency_rates_by_date[datetime]:
+            currency_rate_req.append(self._generate_consult_currency_rate(datetime, origin_curr, self._target_currency))
+        else:
+            data_copy["Payment Currency"] = self._target_currency
+            data_copy["Amount Paid"] = float(data["Amount Paid"]) * self._currency_rates_by_date[datetime][(origin_curr, dest_curr)]
 
-    def _consult_currency_rates_api(self, date, origin_currency, dest_currency):
-        # Send data
-        self._input_reqs_queue.send(
-            internal.serialize(
-                    [
-                        self._conversor_id,
-                        date,
-                        origin_currency,
-                        dest_currency
-                    ]
-                )
-            )
+        return (currency_rate_req, [data_copy])
 
-        # Wait for result
-        req_response = self._reqs_results_channel.get()
-        return req_response[2]
 
-    def process(self, data):
-        date = data["Timestamp"]
+    def process_secondary_input(self, data: dict, prev_stage_data: list) -> tuple[list, list]:
+        new_data_list = []
 
-        # Get currency rates of dates
-        currency_rates = self._currency_rates_by_date.get(date, {})
+        if "Type" not in data:
+            prev_stage_data_row = prev_stage_data[self._current_prev_row_analyzed].copy()
+            while self._current_prev_row_analyzed < len(prev_stage_data):
+                datetime = data["timestamp"]
+                origin_curr = data["origin"]
+                dest_curr = data["destination"]
 
-        # If currency not included
-        origin_currency = data["Payment Currency"]
-        if origin_currency not in currency_rates:
-            currency_rates[origin_currency] = self._consult_currency_rates_api(date, origin_currency, self._target_currency)
+                if prev_stage_data_row["Timestamp"] == datetime and \
+                        prev_stage_data_row["Received Currency"] == origin_curr and \
+                        prev_stage_data_row["Payment Currency"] == dest_curr:
+                    currency_rate = data["conversion_rate"]
 
-        amount = float(data["Amount Paid"])
-        data["Amount Paid"] = str(amount * currency_rates[origin_currency])
+                    # Change data to send
+                    prev_stage_data_row["Amount Paid"] = str(currency_rate * float(prev_stage_data["Amount Paid"]))
+                    prev_stage_data_row["Payment Currency"] = self._target_currency
 
-        del data["Payment Currency"]
+                    # If data was not stored, store it
+                    self._currency_rates_by_date.setdefault(datetime, {})
+                    self._currency_rates_by_date[datetime].setdefault((origin_curr, dest_curr), {})
+                    self._currency_rates_by_date[datetime][(origin_curr, dest_curr)] = currency_rate
 
-        return [data]
+                    new_data_list.append(prev_stage_data_row)
+                    self._current_prev_row_analyzed += 1
+                    break
 
+                new_data_list.append(prev_stage_data_row)
+                self._current_prev_row_analyzed += 1
+
+        return new_data_list
 
     def on_eof(self):
         return []
