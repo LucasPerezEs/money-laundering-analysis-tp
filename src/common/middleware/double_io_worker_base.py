@@ -287,7 +287,10 @@ class WorkerBase:
 
                 else:
                     for row in msg.get("rows", []):
-                        self._emit(self.process_main_input(row))
+                        if self._operation_mode == "PIPELINE":
+                            self._emit_results_main_stage(self.process_main_input(row))
+                        else:
+                            self.process_main_input(row)
                     ack()
             except Exception as e:
                 logger.error(f"Error procesando mensaje: {e}")
@@ -301,8 +304,6 @@ class WorkerBase:
 
     def handle_message_sec_input(self):
         eof_count = [0]
-        eof_per_client = {}
-        done_clients = set()
 
         def on_message(body: bytes, ack, nack):
             try:
@@ -321,19 +322,13 @@ class WorkerBase:
                             logger.info(f"{self.__class__.__name__} terminado")
                         return
 
-                    eof_per_client[client_id] = eof_per_client.get(client_id, 0) + 1
+                    self._clients_eof_sec_input[client_id] = self._clients_eof_sec_input.get(client_id, 0) + 1
                     ack()
-                    if eof_per_client[client_id] >= self.n_upstream and client_id not in done_clients:
+                    if self._clients_eof_sec_input[client_id] >= self.n_upstream:
                         for result in self.on_eof(client_id):
                             self._emit([result])
                         self._flush_all()
                         self._send_eof(client_id)
-                        done_clients.add(client_id)
-
-                    if self.total_clients > 0 and len(done_clients) >= self.total_clients:
-                        self._sec_consumer.stop_consuming()
-                        logger.info(f"{self.__class__.__name__} terminado")
-                    return
                 else:
                     for row in msg.get("rows", []):
                         self._emit(self.process(row))
