@@ -22,7 +22,8 @@ Variables de entorno:
   OUTPUT_SHARDS   : cantidad de shards de salida (default 1)
   BATCH_SIZE      : filas por batch de salida (default 500)
   OP_MODE           : Modo de operación del worker. JOINER si se quiere que se use como joiner de
-                        de dos entradas o PIPELINE si se quieren realizar acciones en 
+                        de dos entradas o PIPELINE si se quieren realizar acciones primero con la
+                        entrada principal y luego con la entrada secundaria.
 """
 import json
 import logging
