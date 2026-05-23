@@ -27,7 +27,7 @@ OUTPUT_QUEUE_TAG = "OUTPUT_QUEUE"
 OUTPUT_EXCHANGE_TAG = "OUTPUT_EXCHANGE"
 
 
-def get_money_conversion_api_client_docker_services(service_prefix, total_instances, columns_kept,
+def get_money_conversion_api_client_docker_services(service_prefix, total_instances,
                                     input_queue=None, input_exchange=None,
                                     output_queue=None, output_exchange=None,
                                     n_upstream=1, output_shards=1):

@@ -23,16 +23,19 @@ SEC_INPUT_EXCHANGE_TAG = "SEC_INPUT_EXCHANGE"
 SHARD_ID_TAG="SHARD_ID"
 MAIN_N_UPSTREAM_TAG="MAIN_N_UPSTREAM"
 SEC_N_UPSTREAM_TAG="SEC_N_UPSTREAM"
-OUTPUT_QUEUE_TAG = "MAIN_OUTPUT_QUEUE"
-OUTPUT_EXCHANGE_TAG = "MAIN_OUTPUT_EXCHANGE"
+MAIN_OUTPUT_QUEUE_TAG = "MAIN_OUTPUT_QUEUE"
+MAIN_OUTPUT_EXCHANGE_TAG = "MAIN_OUTPUT_EXCHANGE"
+SEC_OUTPUT_QUEUE_TAG = "SEC_OUTPUT_QUEUE"
+SEC_OUTPUT_EXCHANGE_TAG = "SEC_OUTPUT_EXCHANGE"
 
 ## Target currency
 TARGET_CURRENCY_TAG = "TARGET_CURRENCY"
 
-def get_money_converters(service_prefix, total_instances, target_currency,
+def get_money_converters_services(service_prefix, total_instances, target_currency,
                         main_input_queue=None, main_input_exchange=None, main_n_upstream=None,
                         sec_input_queue=None, sec_input_exchange=None, sec_n_upstream=None,
-                        output_queue=None, output_exchange=None,
+                        main_output_queue=None, main_output_exchange=None,
+                        sec_output_queue=None, sec_output_exchange=None,
                         ):
     with open(CONFIG_FILE, "r") as config_file:
         base_money_converter_service = yaml.safe_load(config_file)
@@ -70,10 +73,15 @@ def get_money_converters(service_prefix, total_instances, target_currency,
         if sec_n_upstream is not None:
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SEC_N_UPSTREAM_TAG}={sec_n_upstream}")
 
-        if output_queue is not None:
-            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_QUEUE_TAG}={output_queue}")
-        elif output_exchange is not None:
-            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_EXCHANGE_TAG}={output_exchange}")
+        if main_output_queue is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{MAIN_OUTPUT_QUEUE_TAG}={main_output_queue}")
+        elif main_output_exchange is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{MAIN_OUTPUT_EXCHANGE_TAG}={main_output_exchange}")
+
+        if sec_output_queue is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SEC_OUTPUT_QUEUE_TAG}={sec_output_queue}")
+        elif sec_output_exchange is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SEC_OUTPUT_EXCHANGE_TAG}={sec_output_exchange}")
 
         ## Target currency
         new_service_config[DOCKER_ENV_VARS_NAME].append(f"{TARGET_CURRENCY_TAG}={target_currency}")

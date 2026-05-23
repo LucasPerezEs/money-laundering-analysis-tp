@@ -1,3 +1,4 @@
+import os
 import yaml
 import copy
 
@@ -11,6 +12,8 @@ CONFIGS_FILES = {
     "paths_creator" : PATHS_CREATOR_CONFIG_FILE,
     "unique_paths_count" : UNIQUE_PATHS_COUNTER_CONFIG_FILE
 }
+
+BASE_DIR = os.path.dirname(__file__)
 
 # Build section
 DOCKER_BUILD_SECTION_NAME = "build"
@@ -30,7 +33,7 @@ TOTAL_CLIENTS_TAG = "TOTAL_CLIENTS"
 
 def get_scatter_gather_services(service_prefix, total_instances, service_type, input_exchange, output_queue, total_clients=0):
     # Open config file
-    config_file_name = CONFIGS_FILES[service_type]
+    config_file_name = os.path.join(BASE_DIR, CONFIGS_FILES[service_type])
     with open(config_file_name, "r") as config_file:
         base_scatter_gather_service = yaml.safe_load(config_file)
 

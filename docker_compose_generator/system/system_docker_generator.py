@@ -1,11 +1,13 @@
 from .aggregator.aggregator_docker_service import get_aggregator_docker_services
+from .barrier_filter.barrier_filter_docker_service import get_barrier_filters_services
 from .data_reducer.data_reducer_docker_service import get_data_reducer_docker_services
 from .filter.filter_docker_service import get_filters_docker_services
 from .gateway.gateway_docker_service import get_gateway_docker_services
+from .money_converter.money_converter_api_docker_service import get_money_conversion_api_client_docker_services
+from .money_converter.money_converter_docker_service import get_money_converters_services
 from .rabbitmq.rabbitmq_docker_service import get_rabbitmq_docker_service
 from .scatter_gather.scatter_gather_generators import get_scatter_gather_services
 from .splitter.splitter_docker_service import get_splitter_docker_services
-from .barrier_filter.barrier_filter_docker_service import get_barrier_filters_services
 
 
 import csv
@@ -53,17 +55,27 @@ def generate_system_docker_compose(total_clients=0):
         q4_data_reducer_prefix, q4_data_reducer_instances = _get_next_config_row(config_file_reader)
         q4_filter_01092022_05092022_prefix, q4_filter_01092022_05092022_instances = _get_next_config_row(config_file_reader)
         q4_splitters_by_origin_and_dest_prefix, q4_splitters_by_origin_and_dest_instances = _get_next_config_row(config_file_reader)
-        q4_transaction_graph_prefix, q4_transaction_graph_instances = _get_next_config_row(config_file)
-        q4_graphs_edges_splitters_prefix, q4_graphs_edges_splitters_instances = _get_next_config_row(config_file)
-        q4_paths_creators_prefix, q4_paths_creators_instances = _get_next_config_row(config_file)
-        q4_paths_splitters_by_ends_prefix, q4_paths_splitters_by_ends_instances = _get_next_config_row(config_file)
-        q4_unique_paths_counters_prefix, q4_unique_paths_counters_instances = _get_next_config_row(config_file)
+        q4_transaction_graph_prefix, q4_transaction_graph_instances = _get_next_config_row(config_file_reader)
+        q4_graphs_edges_splitters_prefix, q4_graphs_edges_splitters_instances = _get_next_config_row(config_file_reader)
+        q4_paths_creators_prefix, q4_paths_creators_instances = _get_next_config_row(config_file_reader)
+        q4_paths_splitters_by_ends_prefix, q4_paths_splitters_by_ends_instances = _get_next_config_row(config_file_reader)
+        q4_unique_paths_counters_prefix, q4_unique_paths_counters_instances = _get_next_config_row(config_file_reader)
+
+        q5_data_reducer_prefix, q5_data_reducer_instances = _get_next_config_row(config_file_reader)
+        q5_filter_01092022_05092022_prefix, q5_filter_01092022_05092022_instances = _get_next_config_row(config_file_reader)
+        q5_money_converters_prefix, q5_money_converters_instances = _get_next_config_row(config_file_reader)
+        q5_money_converter_api_client_prefix, q5_money_converter_api_client_instances = _get_next_config_row(config_file_reader)
+        q5_filter_lt_1_usd_prefix, q5_filter_lt_1_usd_instances = _get_next_config_row(config_file_reader)
+        q5_payment_fmt_filters_prefix, q5_payment_fmt_filters_instances = _get_next_config_row(config_file_reader)
+        q5_counter_prefix, q5_counter_instances = _get_next_config_row(config_file_reader)
+        q5_totals_sumer_prefix, q5_totals_sumer_instances = _get_next_config_row(config_file_reader)
 
         gateway["gateway"]["environment"].append(f"OUTPUT_SHARDS={usd_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_1_N_UPSTREAM={filter_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_2_N_UPSTREAM={q2_aggregator_instances}")
-        gateway["gateway"]["environment"].append(f"QUERY_3_N_UPSTREAM={q3_avg_and_transactions_joiner}")
+        gateway["gateway"]["environment"].append(f"QUERY_3_N_UPSTREAM={q3_avg_and_transactions_joiner_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_4_N_UPSTREAM={q4_unique_paths_counters_instances}")
+        gateway["gateway"]["environment"].append(f"QUERY_5_N_UPSTREAM={q5_totals_sumer_instances}")
         gateway["gateway"]["environment"].append(
             "TRANSACTION_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1,"
             "Amount Received,Receiving Currency,Amount Paid,Payment Currency,Payment Format"
@@ -280,48 +292,79 @@ def generate_system_docker_compose(total_clients=0):
         )
         system = system | q4_unique_paths_counters
 
-    return system
+        # =========================================================
+        # QUERY 5
+        # =========================================================
 
-#        # Query 5
-#        ## Data reducers
-#        data_reducers_q5 = get_data_reducer_docker_services("q5_data_reducer", 1,
-#                                                            ["Timestamp", "From Bank", "Account", "To Bank", "Account.1", "Amount Paid"],
-#                                                            input_queue="cleaned_data",
-#                                                            output_queue="q5_reduced_data",
-#                                                            )
-#        system = system | data_reducers_q5
-#
-#        ## Filter dates between 01/09/2022 and 05/09/2022 included
-#        raise Exception("TODO: Ver que fecha caiga entre 01/09/2022 y 05/09/2022 inclusive")
-#
-#        ## Convertion to USD
-#        raise Exception("TODO: Conversión a USD")
-#
-#        ## Filter of less than 1 USD
-#        q5_filter_lt_1_usd = get_filters_docker_services("q5_filter_lt_1_usd", 1,
-#                                                        "Amount Paid", "1", "lt",
-#                                                        input_queue="q5_converted_amounts_transactions",
-#                                                        output_queue="q5_small_amounts_transactions"
-#                                                        )
-#        system = system | q5_filter_lt_1_usd
-#
-#        ## Filter by payment methods
-#        raise Exception("TODO: Que se verifique con más de un método por worker")
-#
-#        ## Count transactions that arrive
-#        q5_counters = get_aggregator_docker_services("transaction_counter", 1,
-#                                                    input_queue="q5_countable_transactions",
-#                                                    output_queue="q5_totals_reached",
-#                                                    agg_op="count"
-#                                                    )
-#        
-#        ## Add results
-#        q5_transactions_counter = get_aggregator_docker_services("transaction_counter", 1,
-#                                                    input_queue="q5_countable_transactions",
-#                                                    output_queue="q5_totals_reached",
-#                                                    agg_op="sum", agg_field="count",
-#                                                    )
-#        system = system | q5_transactions_counter
-#
-#        # Return complete YAML system
-#        return system
+        # Data reducers
+        q5_data_reducers = get_data_reducer_docker_services(
+            q5_data_reducer_prefix, q5_data_reducer_instances,
+            ["Timestamp", "From Bank", "Account", "To Bank", "Account.1", "Amount Paid"],
+            input_queue="cleaned_data",
+            output_queue="q5_reduced_data",
+        )
+        system = system | q5_data_reducers
+
+        # Filter dates between 01/09/2022 and 05/09/2022 included
+        q5_filters_01092022_05092022 = get_filters_docker_services(
+            q5_filter_01092022_05092022_prefix, q5_filter_01092022_05092022_instances,
+            filter_field="Timestamp", filter_op="in", filter_value='["2022/09/01", "2022/09/05"]',
+            input_queue="q5_reduced_data",
+            output_queue="q5_converter_to_usd",
+        )
+        system = system | q5_filters_01092022_05092022
+
+        # Convertion to USD
+        q5_money_converters = get_money_converters_services(
+            q5_money_converters_prefix, q5_money_converters_instances, "US Dollar",
+            main_input_queue="q5_converter_to_usd",
+            sec_input_queue="q5_currency_rates_from_api",
+            main_output_queue="q5_reqs_currency_rates_api",
+            sec_output_queue="q5_filter_lt_1_usd",
+        )
+        system = system | q5_money_converters
+
+        q5_money_converters_api_client = get_money_conversion_api_client_docker_services(
+            q5_money_converter_api_client_prefix, q5_money_converter_api_client_instances,
+            input_queue="q5_reqs_currency_rates_api",
+            output_queue="q5_currency_rates_from_api"
+        )
+        system = system | q5_money_converters_api_client
+
+        # Filter of less than 1 USD
+        q5_filters_lt_1_usd = get_filters_docker_services(
+            q5_filter_lt_1_usd_prefix, q5_filter_lt_1_usd_instances,
+            "Amount Paid", "1", "lt",
+            input_queue="q5_converted_amounts_transactions",
+            output_queue="q5_small_amounts_transactions"
+        )
+        system = system | q5_filters_lt_1_usd
+
+        # Filter by payment methods
+        q5_payment_fmt_filters = get_filters_docker_services(
+            q5_payment_fmt_filters_prefix, q5_payment_fmt_filters_instances,
+            filter_field="Payment Method", filter_op="in", filter_value='["Wire", "ACH"]',
+            input_queue="q5_small_amounts_transactions",
+            output_queue="q5_countable_transactions"
+        )
+        system = system | q5_payment_fmt_filters
+
+        # Count transactions that arrive
+        q5_counters = get_aggregator_docker_services(
+            q5_counter_prefix, q5_counter_instances,
+            input_queue="q5_countable_transactions",
+            output_queue="q5_totals_reached",
+            agg_op="count"
+        )
+        system = system | q5_counters
+
+        # Add results
+        q5_totals_sumers = get_aggregator_docker_services(
+            q5_totals_sumer_prefix, q5_totals_sumer_instances,
+            input_queue="q5_totals_reached",
+            output_queue="results_5",
+            agg_op="sum", agg_field="count",
+        )
+        system = system | q5_totals_sumers
+
+    return system
