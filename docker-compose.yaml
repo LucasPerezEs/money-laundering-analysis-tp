@@ -518,6 +518,128 @@ services:
     - INPUT_EXCHANGE=q4_paths_exc
     - SHARD_ID=0
     - OUTPUT_QUEUE=results_4
+  q5_counter_0:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q5_counter_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_QUEUE=q5_countable_transactions
+    - OUTPUT_QUEUE=q5_totals_reached
+    - AGG_OP=count
+  q5_data_reducer_0:
+    build:
+      context: ./src
+      dockerfile: data_reducer/Dockerfile
+    container_name: q5_data_reducer_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - RABBITMQ_HOST=rabbitmq
+    - N_UPSTREAM=1
+    - INPUT_QUEUE=cleaned_data
+    - OUTPUT_QUEUE=q5_reduced_data
+    - KEEP_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1,Amount Paid
+  q5_filter_01092022_05092022_0:
+    build:
+      context: ./src
+      dockerfile: filters/Dockerfile
+    container_name: q5_filter_01092022_05092022_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - RABBITMQ_HOST=rabbitmq
+    - N_UPSTREAM=1
+    - N_UPSTREAM=1
+    - INPUT_QUEUE=q5_reduced_data
+    - OUTPUT_QUEUE=q5_converter_to_usd
+    - FILTER_FIELD=Timestamp
+    - FILTER_OP=in
+    - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+  q5_filter_lt_1_usd_0:
+    build:
+      context: ./src
+      dockerfile: filters/Dockerfile
+    container_name: q5_filter_lt_1_usd_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - RABBITMQ_HOST=rabbitmq
+    - N_UPSTREAM=1
+    - N_UPSTREAM=1
+    - INPUT_QUEUE=q5_converted_amounts_transactions
+    - OUTPUT_QUEUE=q5_small_amounts_transactions
+    - FILTER_FIELD=Amount Paid
+    - FILTER_OP=lt
+    - FILTER_VALUE=1
+  q5_money_converter_0:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q5_money_converter_0
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - OP_MODE=PIPELINE
+    - MAIN_INPUT_QUEUE=q5_converter_to_usd
+    - SEC_INPUT_QUEUE=q5_currency_rates_from_api
+    - MAIN_OUTPUT_QUEUE=q5_reqs_currency_rates_api
+    - SEC_OUTPUT_QUEUE=q5_filter_lt_1_usd
+    - TARGET_CURRENCY=US Dollar
+  q5_money_converter_api_client_0:
+    build:
+      context: ./src
+      dockerfile: money_converter/Dockerfile
+    container_name: q5_money_converter_api_client_0
+    entrypoint:
+    - python3
+    - money_converter_api.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - N_UPSTREAM=1
+    - INPUT_QUEUE=q5_reqs_currency_rates_api
+    - OUTPUT_QUEUE=q5_currency_rates_from_api
+  q5_payment_fmt_filter_0:
+    build:
+      context: ./src
+      dockerfile: filters/Dockerfile
+    container_name: q5_payment_fmt_filter_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - RABBITMQ_HOST=rabbitmq
+    - N_UPSTREAM=1
+    - N_UPSTREAM=1
+    - INPUT_QUEUE=q5_small_amounts_transactions
+    - OUTPUT_QUEUE=q5_countable_transactions
+    - FILTER_FIELD=Payment Method
+    - FILTER_OP=in
+    - FILTER_VALUE=["Wire", "ACH"]
+  q5_transaction_counter_0:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q5_transaction_counter_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_QUEUE=q5_totals_reached
+    - OUTPUT_QUEUE=results_5
+    - AGG_OP=sum
+    - AGG_FIELD=count
   rabbitmq:
     build:
       context: ./src/rabbitmq
