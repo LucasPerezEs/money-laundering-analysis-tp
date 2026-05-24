@@ -45,6 +45,6 @@ class BarrierFilter(WorkerBaseDoubleIO):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(filename=__file__, level=logging.INFO)
+    logging.basicConfig(level=logging.INFO)
     barrier_filter = BarrierFilter()
-    barrier_filter.start()
+    barrier_filter.run()

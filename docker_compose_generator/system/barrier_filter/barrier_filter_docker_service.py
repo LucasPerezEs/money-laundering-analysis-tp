@@ -18,8 +18,8 @@ DOCKER_ENV_VARS_NAME = "environment"
 ## I/O
 MAIN_INPUT_QUEUE_TAG = "MAIN_INPUT_QUEUE"
 MAIN_INPUT_EXCHANGE_TAG = "MAIN_INPUT_EXCHANGE"
-SEC_INPUT_QUEUE_TAG = "SEC_INPUT_QUEUE"
-SEC_INPUT_EXCHANGE_TAG = "SEC_INPUT_EXCHANGE"
+SEC_INPUT_QUEUE_TAG = "SECONDARY_INPUT_QUEUE"
+SEC_INPUT_EXCHANGE_TAG = "SECONDARY_INPUT_EXCHANGE"
 SHARD_ID_TAG="SHARD_ID"
 MAIN_N_UPSTREAM_TAG="MAIN_N_UPSTREAM"
 SEC_N_UPSTREAM_TAG="SEC_N_UPSTREAM"
@@ -43,10 +43,6 @@ def get_barrier_filters_services(service_prefix, total_instances,
         # Add container name
         new_service_name = f"{service_prefix}_{i}"
         new_service_config[CONTAINER_NAME_TAG] = new_service_name
-
-        # Add context folder
-        new_service_config[DOCKER_BUILD_SECTION_NAME][DOCKER_BUILD_CONTEXT_SUBSECTION_NAME] = "./src"
-        new_service_config[DOCKER_BUILD_SECTION_NAME]["dockerfile"] = "aggregators/Dockerfile"
 
         # Add environment variables
         ## I/O

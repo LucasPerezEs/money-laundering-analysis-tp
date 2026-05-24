@@ -34,9 +34,9 @@ import sys
 import multiprocessing
 import queue
 
-from middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
-from middleware.middleware_sharded import ShardedExchangeConsumer, ShardedExchangeProducer
-from middleware.middleware import MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError
+from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
+from common.middleware.middleware_sharded import ShardedExchangeConsumer, ShardedExchangeProducer
+from common.middleware.middleware import MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ class WorkerBaseDoubleIO:
 
         _wait_for_rabbitmq()
         self._setup_connections()
-        self._define_type()
+        self._define_operation_mode()
 
     def _setup_connections(self):
         # Main input
