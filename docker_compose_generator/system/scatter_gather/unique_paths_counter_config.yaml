@@ -1,6 +1,6 @@
 build:
-  context: ./src/unique_paths_counter
-  dockerfile: Dockerfile
+  context: ./src
+  dockerfile: unique_paths_counter/Dockerfile
 depends_on:
   rabbitmq:
     condition: service_healthy
