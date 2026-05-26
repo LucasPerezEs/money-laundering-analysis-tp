@@ -77,14 +77,84 @@ class WorkerBaseDoubleIO:
             raise ValueError("Modo de operación incorrecto. Debe ser PIPELINE o JOINER")
 
     def _handle_main_process_sigterm(self, *_):
-        self._main_consumer.stop_consuming()
-        self._main_consumer.close()
-        self._main_producer.close()
+        self._close_main_resources()
 
     def _handle_sec_process_sigterm(self, *_):
-        self._sec_consumer.stop_consuming()
-        self._sec_consumer.close()
-        self._sec_producer.close()
+        self._close_sec_resources()
+
+    def _close_main_resources(self):
+        try:
+            if hasattr(self, "_main_consumer") and self._main_consumer is not None:
+                self._main_consumer.stop_consuming()
+                self._main_consumer.close()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "_main_producer") and self._main_producer is not None:
+                self._main_producer.close()
+        except Exception:
+            pass
+
+    def _close_sec_resources(self):
+        try:
+            if hasattr(self, "_sec_consumer") and self._sec_consumer is not None:
+                self._sec_consumer.stop_consuming()
+                self._sec_consumer.close()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "_sec_producer") and self._sec_producer is not None:
+                self._sec_producer.close()
+        except Exception:
+            pass
+
+    def _producer_is_open(self, producer):
+        if producer is None:
+            return False
+        conn = getattr(producer, "connection", None)
+        if conn is None:
+            return True
+        return getattr(conn, "is_open", False)
+
+    def _recreate_main_producer(self):
+        if self.main_output_exchange and self.main_output_shards > 1:
+            self._main_producer = ShardedExchangeProducer(
+                RABBITMQ_HOST, self.main_output_exchange, self.main_output_shards
+            )
+        elif self.main_output_queue:
+            self._main_producer = MessageMiddlewareQueueRabbitMQ(
+                RABBITMQ_HOST, self.main_output_queue
+            )
+
+    def _recreate_sec_producer(self):
+        if self.sec_output_exchange and self.sec_output_shards > 1:
+            self._sec_producer = ShardedExchangeProducer(
+                RABBITMQ_HOST, self.sec_output_exchange, self.sec_output_shards
+            )
+        elif self.sec_output_queue:
+            self._sec_producer = MessageMiddlewareQueueRabbitMQ(
+                RABBITMQ_HOST, self.sec_output_queue
+            )
+
+    def _ensure_main_producer(self):
+        if self._main_producer is None:
+            return
+        if not self._producer_is_open(self._main_producer):
+            try:
+                self._main_producer.close()
+            except Exception:
+                pass
+            self._recreate_main_producer()
+
+    def _ensure_sec_producer(self):
+        if self._sec_producer is None:
+            return
+        if not self._producer_is_open(self._sec_producer):
+            try:
+                self._sec_producer.close()
+            except Exception:
+                pass
+            self._recreate_sec_producer()
 
     # --- Para implementar en subclases -------------------------------------------
 
@@ -155,20 +225,36 @@ class WorkerBaseDoubleIO:
         if not rows:
             return
         body = json.dumps({"rows": rows}).encode()
-        if self.main_output_exchange and self.main_output_shards > 1:
-            self._main_producer.send_to_shard(body, int(buf_key))
-        else:
-            self._main_producer.send(body)
+        self._ensure_main_producer()
+        try:
+            if self.main_output_exchange and self.main_output_shards > 1:
+                self._main_producer.send_to_shard(body, int(buf_key))
+            else:
+                self._main_producer.send(body)
+        except MessageMiddlewareDisconnectedError:
+            self._ensure_main_producer()
+            if self.main_output_exchange and self.main_output_shards > 1:
+                self._main_producer.send_to_shard(body, int(buf_key))
+            else:
+                self._main_producer.send(body)
 
     def _flush_sec_buffer_key(self, buf_key: str):
         rows = self._sec_out_buffer.pop(buf_key, [])
         if not rows:
             return
         body = json.dumps({"rows": rows}).encode()
-        if self.sec_output_exchange and self.sec_output_shards > 1:
-            self._sec_producer.send_to_shard(body, int(buf_key))
-        else:
-            self._sec_producer.send(body)
+        self._ensure_sec_producer()
+        try:
+            if self.sec_output_exchange and self.sec_output_shards > 1:
+                self._sec_producer.send_to_shard(body, int(buf_key))
+            else:
+                self._sec_producer.send(body)
+        except MessageMiddlewareDisconnectedError:
+            self._ensure_sec_producer()
+            if self.sec_output_exchange and self.sec_output_shards > 1:
+                self._sec_producer.send_to_shard(body, int(buf_key))
+            else:
+                self._sec_producer.send(body)
 
     def _flush_all_main_buffer(self):
         for key in list(self._main_out_buffer.keys()):
@@ -189,10 +275,18 @@ class WorkerBaseDoubleIO:
         if client_id is not None:
             eof_msg["client_id"] = client_id
         eof_body = json.dumps(eof_msg).encode()
-        if self.main_output_exchange and self.main_output_shards > 1:
-            self._main_producer.send_eof_to_all(eof_body)
-        else:
-            self._main_producer.send(eof_body)
+        self._ensure_main_producer()
+        try:
+            if self.main_output_exchange and self.main_output_shards > 1:
+                self._main_producer.send_eof_to_all(eof_body)
+            else:
+                self._main_producer.send(eof_body)
+        except MessageMiddlewareDisconnectedError:
+            self._ensure_main_producer()
+            if self.main_output_exchange and self.main_output_shards > 1:
+                self._main_producer.send_eof_to_all(eof_body)
+            else:
+                self._main_producer.send(eof_body)
     
     def _send_sec_output_eof(self, client_id=None):
         if self._sec_producer is None:
@@ -201,10 +295,18 @@ class WorkerBaseDoubleIO:
         if client_id is not None:
             eof_msg["client_id"] = client_id
         eof_body = json.dumps(eof_msg).encode()
-        if self.sec_output_exchange and self.sec_output_shards > 1:
-            self._sec_producer.send_eof_to_all(eof_body)
-        else:
-            self._sec_producer.send(eof_body)
+        self._ensure_sec_producer()
+        try:
+            if self.sec_output_exchange and self.sec_output_shards > 1:
+                self._sec_producer.send_eof_to_all(eof_body)
+            else:
+                self._sec_producer.send(eof_body)
+        except MessageMiddlewareDisconnectedError:
+            self._ensure_sec_producer()
+            if self.sec_output_exchange and self.sec_output_shards > 1:
+                self._sec_producer.send_eof_to_all(eof_body)
+            else:
+                self._sec_producer.send(eof_body)
 
     def _execute_eof_main_input(self, client_id=None):
         if self._operation_mode == "PIPELINE":
@@ -291,6 +393,8 @@ class WorkerBaseDoubleIO:
         except MessageMiddlewareDisconnectedError:
             if self._running:
                 logger.error("Conexion perdida con RabbitMQ")
+        finally:
+            self._close_main_resources()
 
     def handle_message_sec_input(self):
         eof_count = [0]
@@ -332,6 +436,8 @@ class WorkerBaseDoubleIO:
         except MessageMiddlewareDisconnectedError:
             if self._running:
                 logger.error("Conexion perdida con RabbitMQ")
+        finally:
+            self._close_sec_resources()
 
     def run_main_process(self, clients_eof_main, clients_eof_sec, clients_joined, eof_lock, channel_stages):
         logging.basicConfig(level=logging.INFO)

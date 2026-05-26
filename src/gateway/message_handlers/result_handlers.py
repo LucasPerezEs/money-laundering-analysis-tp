@@ -8,6 +8,14 @@ from common import middleware, message_protocol
 ACCOUNT_BANK_NAME_COL = "Bank Name"
 
 
+def _normalize_bank_id(bank_id):
+    if bank_id is None:
+        return None
+    normalized = str(bank_id).strip()
+    normalized = normalized.lstrip("0")
+    return normalized or "0"
+
+
 def _expect_client_ack(client_socket, client_id):
     msg_type, payload = message_protocol.external.recv_msg(client_socket)
     if msg_type != message_protocol.external.MsgType.ACK:
@@ -47,16 +55,29 @@ def _normalize_result_rows(rows, query_id, bank_maps, client_id):
                 "to_account": row.get("Account.1", ""),
                 "amount": row.get("Amount Paid", 0),
             }
+            
         elif query_id == 2:
             # Q2: bank_name, from_account, amount
-            bank_id = row.get("From Bank", "")
+            bank_id = str(row.get("From Bank", "")).strip()
             bank_map = bank_maps.get(client_id, {})
-            bank_name = bank_map.get(bank_id, bank_id)
+            bank_name = bank_map.get(bank_id)
+            if bank_name is None:
+                bank_name = bank_map.get(_normalize_bank_id(bank_id), bank_id)
             mapped = {
                 "bank_name": bank_name,
                 "from_account": row.get("Account", ""),
                 "amount": row.get("Amount Paid", 0),
             }
+        
+        elif query_id == 3:
+            # Q3: from_bank, from_account, payment_format, amount
+            mapped = {
+                "from_bank": row.get("From Bank", ""),
+                "from_account": row.get("Account", ""),
+                "payment_format": row.get("Payment Format", ""),
+                "amount": row.get("Amount Paid", 0),
+            }
+
         else:
             # Para queries aún no implementadas, pasamos las claves originales (quitando client_id)
             mapped = {k: v for k, v in row.items() if k != "client_id"}

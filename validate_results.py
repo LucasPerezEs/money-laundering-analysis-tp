@@ -117,10 +117,15 @@ def serial_q2(rows, accounts):
     for r in rows:
         if r["payment_currency"] != "US Dollar":
             continue
-        bank_id = r["from_bank"]
+        raw_bank_id = r["from_bank"]
+        bank_id = str(raw_bank_id).strip()
+        normalized_bank_id = bank_id.lstrip("0") or "0"
+        bank_name = accounts.get(bank_id)
+        if bank_name is None:
+            bank_name = accounts.get(normalized_bank_id, raw_bank_id)
         if bank_id not in best or r["amount"] > best[bank_id]["amount"]:
             best[bank_id] = {
-                "bank_name":    accounts.get(bank_id, bank_id),
+                "bank_name":    bank_name,
                 "from_account": r["from_account"],
                 "amount":       r["amount"],
             }
@@ -136,7 +141,12 @@ def serial_q3(rows):
         acc[r["payment_format"]]["n"] += 1
     avgs = {f: v["s"] / v["n"] for f, v in acc.items() if v["n"]}
     return [
-        {"from_account": r["from_account"], "amount": r["amount"]}
+        {
+            "from_bank": r["from_bank"],
+            "from_account": r["from_account"],
+            "payment_format": r["payment_format"],
+            "amount": r["amount"],
+        }
         for r in period_b
         if r["payment_format"] in avgs
         and r["amount"] < avgs[r["payment_format"]] * 0.01

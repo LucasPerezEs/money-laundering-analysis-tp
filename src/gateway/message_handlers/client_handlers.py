@@ -8,13 +8,23 @@ import random
 import os   
 from common.middleware.middleware_sharded import ShardedExchangeProducer 
 
+
+def _normalize_bank_id(bank_id):
+    if bank_id is None:
+        return None
+    normalized = str(bank_id).strip()
+    normalized = normalized.lstrip("0")
+    return normalized or "0"
+
 def _update_bank_map(bank_maps, client_id, rows):
     bank_map = dict(bank_maps.get(client_id, {}))
     for row in rows:
         if len(row) < 2:
             continue
         bank_name, bank_id = row[0], row[1]
+        bank_id = str(bank_id).strip()
         bank_map[bank_id] = bank_name
+        bank_map[_normalize_bank_id(bank_id)] = bank_name
     bank_maps[client_id] = bank_map
 
 

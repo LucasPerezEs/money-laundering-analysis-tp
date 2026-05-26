@@ -2,6 +2,9 @@ build:
   context: ./src
   dockerfile: barrier_filter/Dockerfile
 container_name: barrier_filter
+depends_on:
+  rabbitmq:
+    condition: service_healthy
 environment:
 - MOM_HOST=rabbitmq
 - PYTHONUNBUFFERED=1

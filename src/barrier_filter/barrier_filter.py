@@ -58,8 +58,10 @@ class BarrierFilter(WorkerBaseDoubleIO):
             if payment_method in comparison_values:
                 if float(transaction["Amount Paid"]) < comparison_values[payment_method]:
                     yield {
+                        "client_id": client_id,
                         "From Bank": transaction["From Bank"],
                         "Account": transaction["Account"],
+                        "Payment Format": payment_method,
                         "Amount Paid": transaction["Amount Paid"]
                     }
 
