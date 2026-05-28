@@ -1,6 +1,6 @@
 build:
-  context: ./src/paths_creator
-  dockerfile: Dockerfile
+  context: ./src/
+  dockerfile: paths_creator/Dockerfile
 depends_on:
   rabbitmq:
     condition: service_healthy

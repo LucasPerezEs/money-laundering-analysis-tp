@@ -40,17 +40,43 @@ CURRENCY_CODES = {
     "Swiss Franc": "CHF", "Australian Dollar": "AUD",
     "Canadian Dollar": "CAD", "Mexican Peso": "MXN",
     "Brazil Real": "BRL", "Rupee": "INR", "Saudi Riyal": "SAR",
+    "Bitcoin": "BTC",
+    "Shekel": "ILS",
 }
+
+BTC_RATES_PATH = os.path.join(
+    os.path.dirname(__file__), "src", "money_converter", "btc_rates.csv"
+)
+
+
+@lru_cache(maxsize=1)
+def _load_btc_rates():
+    rates = {}
+    try:
+        with open(BTC_RATES_PATH, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                day = str(row.get("date", "")).strip().replace("/", "-")
+                rate = row.get("rate")
+                if day and rate:
+                    rates[day] = float(rate)
+    except Exception:
+        return {}
+    return rates
+
+
+def _get_btc_rate(day):
+    return _load_btc_rates().get(day)
 
 @lru_cache(maxsize=1024)
 def get_rate(from_code, day):
     if from_code == "USD":
         return 1.0
     try:
-        url = f"https://api.frankfurter.app/{day}?from={from_code}&to=USD"
+        url = f"https://api.frankfurter.dev/v2/rate/{from_code}/USD?date={day}"
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
-        return resp.json()["rates"]["USD"]
+        return resp.json()["rate"]
     except Exception:
         return None
 
@@ -60,6 +86,10 @@ def to_usd(amount, currency, timestamp):
         return None
     if code == "USD":
         return amount
+    if code == "BTC":
+        day = parse_date(timestamp).isoformat()
+        rate = _get_btc_rate(day)
+        return amount * rate if rate else None
     day = parse_date(timestamp).isoformat()
     rate = get_rate(code, day)
     return amount * rate if rate else None
@@ -68,10 +98,20 @@ def to_usd(amount, currency, timestamp):
 # Carga de datos ----------------------------------------------------------
 
 def load_transactions(path):
+    print(f"Cargando transacciones desde {path}...")
     rows = []
     with open(path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for r in reader:
+        reader = csv.reader(f)
+        raw_headers = next(reader, [])
+        seen_headers = defaultdict(int)
+        headers = []
+        for header in raw_headers:
+            count = seen_headers[header]
+            headers.append(header if count == 0 else f"{header}.{count}")
+            seen_headers[header] += 1
+
+        for raw_row in reader:
+            r = dict(zip(headers, raw_row))
             try:
                 rows.append({
                     "timestamp":        r["Timestamp"],
@@ -117,10 +157,15 @@ def serial_q2(rows, accounts):
     for r in rows:
         if r["payment_currency"] != "US Dollar":
             continue
-        bank_id = r["from_bank"]
+        raw_bank_id = r["from_bank"]
+        bank_id = str(raw_bank_id).strip()
+        normalized_bank_id = bank_id.lstrip("0") or "0"
+        bank_name = accounts.get(bank_id)
+        if bank_name is None:
+            bank_name = accounts.get(normalized_bank_id, raw_bank_id)
         if bank_id not in best or r["amount"] > best[bank_id]["amount"]:
             best[bank_id] = {
-                "bank_name":    accounts.get(bank_id, bank_id),
+                "bank_name":    bank_name,
                 "from_account": r["from_account"],
                 "amount":       r["amount"],
             }
@@ -136,7 +181,12 @@ def serial_q3(rows):
         acc[r["payment_format"]]["n"] += 1
     avgs = {f: v["s"] / v["n"] for f, v in acc.items() if v["n"]}
     return [
-        {"from_account": r["from_account"], "amount": r["amount"]}
+        {
+            "from_bank": r["from_bank"],
+            "from_account": r["from_account"],
+            "payment_format": r["payment_format"],
+            "amount": r["amount"],
+        }
         for r in period_b
         if r["payment_format"] in avgs
         and r["amount"] < avgs[r["payment_format"]] * 0.01
@@ -146,21 +196,34 @@ def serial_q4(rows):
     usd_a = [r for r in rows
              if r["payment_currency"] == "US Dollar"
              and in_period(r["timestamp"], "2022-09-01", "2022-09-05")]
-    out_e = defaultdict(set)
-    in_e  = defaultdict(set)
-    for r in usd_a:
-        out_e[r["from_account"]].add(r["to_account"])
-        in_e[r["to_account"]].add(r["from_account"])
-    pairs = defaultdict(set)
-    for b, origins in in_e.items():
-        for a in origins:
-            for c in out_e.get(b, set()):
-                if a != c:
-                    pairs[(a, c)].add(b)
+
+    edges = [
+        (
+            (r["from_bank"], r["from_account"]),
+            (r["to_bank"], r["to_account"]),
+        )
+        for r in usd_a
+    ]
+
+    outgoing_by_node = defaultdict(list)
+    for origin, destination in edges:
+        outgoing_by_node[origin].append(destination)
+
+    pair_counts = defaultdict(int)
+    for origin, intermediate in edges:
+        for destination in outgoing_by_node.get(intermediate, []):
+            if origin != destination:
+                pair_counts[(origin, destination)] += 1
+
+    unique_accounts = set()
+    for (origin, destination), size in pair_counts.items():
+        if size > 5:
+            unique_accounts.add(origin)
+            unique_accounts.add(destination)
+
     return [
-        {"origin": a, "destination": c, "n_intermediaries": len(bs)}
-        for (a, c), bs in pairs.items()
-        if len(bs) >= 5 and len(out_e.get(a, set())) >= 5
+        {"bank": bank, "account": account}
+        for bank, account in sorted(unique_accounts)
     ]
 
 def serial_q5(rows):
@@ -185,6 +248,8 @@ def normalize(rows):
         for k, v in r.items():
             if isinstance(v, float):
                 v = round(v, 4)
+                if v.is_integer():
+                    v = int(v)
             items.append((k, str(v)))
         result.add(tuple(sorted(items)))
     return result

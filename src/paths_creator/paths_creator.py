@@ -19,54 +19,73 @@ TRANSACTION_INTERMEDIATE_ACC_KEY = "Interm Acc"
 class PathsCreator(WorkerBase):
 
     def __init__(self):
-        # Create storage for edges of nodes
-        self.incoming_edges = {}
-        self.outgoing_edges = {}
+        super().__init__()
+        # Create storage for edges of nodes by client ID
+        self.edges_by_client_id = {}
 
     # Process data message
-    def process(self, transaction):
-        logging.info("Batch de datos recibido")
+    def process(self, data):
+        logging.debug(f"data recibido: {data}")
+        # Get edge's dictionaries of according to client ID
+        client_id = data["client_id"]
+        edges_pair = self.edges_by_client_id.get(client_id)
+        if edges_pair is None:
+            edges_pair = ({}, {})
+            self.edges_by_client_id[client_id] = edges_pair
+        incoming_edges = edges_pair[0]
+        outgoing_edges = edges_pair[1]
 
         # Transaction origin
         origin = transaction_id.TransactionID(
-                            transaction[TRANSACTION_ORIGIN_BANK_KEY],
-                            transaction[TRANSACTION_ORIGIN_ACC_KEY])
+                            data[TRANSACTION_ORIGIN_BANK_KEY],
+                            data[TRANSACTION_ORIGIN_ACC_KEY])
 
         # Transaction destination
         destination = transaction_id.TransactionID(
-                            transaction[TRANSACTION_DESTINATION_BANK_KEY],
-                            transaction[TRANSACTION_DESTINATION_ACC_KEY])
+                            data[TRANSACTION_DESTINATION_BANK_KEY],
+                            data[TRANSACTION_DESTINATION_ACC_KEY])
 
         # Get tag of edge
-        tag = transaction[EDGE_TAG_KEY]
+        tag = data[EDGE_TAG_KEY]
 
         # Store according if it is an "incoming" edge, where the destination node is stored here,
         # or if it is an "outgoing" edge, where the origin node is stored here
         if tag == "i":
-            if destination not in self.incoming_edges:
-                self.incoming_edges[destination] = set()
-            self.incoming_edges[destination].add(origin)
+            if destination not in incoming_edges:
+                incoming_edges[destination] = set()
+            incoming_edges[destination].add(origin)
+            logging.debug("Arista de entrada guardada")
         else:
-            if origin not in self.outgoing_edges:
-                self.outgoing_edges[origin] = set()
-            self.outgoing_edges[origin].add(destination)
+            if origin not in outgoing_edges:
+                outgoing_edges[origin] = set()
+            outgoing_edges[origin].add(destination)
+            logging.debug("Arista de salida guardada")
 
-        logging.info("Batch de datos procesado")
+        return []
+
 
     # Process EOF
     def on_eof(self, client_id=None):
-        logging.info("EOF recibido")
+        logging.info(f"EOF received for client_id={client_id}")
+
+        edges_pair = self.edges_by_client_id.get(client_id)
+        if edges_pair is None:
+            logging.info(f"No hay edges para client_id={client_id} en EOF")
+            return []
+
+        incoming_edges = edges_pair[0]
+        outgoing_edges = edges_pair[1]
 
         # For each node with incoming edges
-        for node in self.incoming_edges:
+        for node in incoming_edges:
             # Check if there are outgoing edges
-            if node in self.outgoing_edges:
+            if node in outgoing_edges:
                 # Get intermediate node ID elements
                 interm_bank, interm_acc = node.as_tuple()
 
                 # Get neighbours
-                incoming_edges_neighbours = self.incoming_edges[node]
-                outgoing_edges_neighbours = self.outgoing_edges[node]
+                incoming_edges_neighbours = incoming_edges[node]
+                outgoing_edges_neighbours = outgoing_edges[node]
 
                 # Create paths
                 for inc_neighbour in incoming_edges_neighbours:
@@ -78,6 +97,7 @@ class PathsCreator(WorkerBase):
 
                         # Generate new data row
                         yield {
+                            "client_id" : client_id,
                             TRANSACTION_ORIGIN_BANK_KEY : inc_bank,
                             TRANSACTION_ORIGIN_ACC_KEY : inc_acc,
                             TRANSACTION_INTERMEDIATE_BANK_KEY : interm_bank,

@@ -10,6 +10,7 @@ Variables de entorno:
   RABBITMQ_HOST: host de RabbitMQ (default: rabbitmq)
   INPUT_QUEUE: cola de entrada (si consume de cola simple)
   INPUT_EXCHANGE: exchange de entrada (si consume de shard)
+  CONSUMER_GROUP  : nombre logico de la etapa consumidora del exchange
   SHARD_ID        : id del shard de este worker
   N_UPSTREAM      : cantidad de EOFs a esperar
   OUTPUT_QUEUE    : cola de salida simple
@@ -25,21 +26,22 @@ import signal
 import time
 import hashlib
 
-from middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
-from middleware.middleware_sharded import ShardedExchangeConsumer, ShardedExchangeProducer
-from middleware.middleware import MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError
+from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ, _connection_parameters
+from common.middleware.middleware_sharded import ShardedExchangeConsumer, ShardedExchangeProducer
+from common.middleware.middleware import MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError
 
 logger = logging.getLogger(__name__)
 
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 RECONNECT_DELAY = 2
+RECONNECT_MAX_DELAY = 30
 
 
 def _wait_for_rabbitmq():
     while True:
         try:
             import pika
-            conn = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
+            conn = pika.BlockingConnection(_connection_parameters(RABBITMQ_HOST))
             conn.close()
             return
         except Exception:
@@ -52,6 +54,7 @@ class WorkerBase:
     def __init__(self):
         self.input_queue     = os.environ.get("INPUT_QUEUE", "")
         self.input_exchange  = os.environ.get("INPUT_EXCHANGE", "")
+        self.consumer_group  = os.environ.get("CONSUMER_GROUP", self.__class__.__name__)
         self.shard_id        = int(os.environ.get("SHARD_ID", "-1"))
         self.n_upstream      = int(os.environ.get("N_UPSTREAM", "1"))
         self.output_queue    = os.environ.get("OUTPUT_QUEUE", "")
@@ -71,7 +74,9 @@ class WorkerBase:
     def _setup_connections(self):
         # Input
         if self.input_exchange and self.shard_id >= 0:
-            self._consumer = ShardedExchangeConsumer(RABBITMQ_HOST, self.input_exchange, self.shard_id)
+            self._consumer = ShardedExchangeConsumer(
+                RABBITMQ_HOST, self.input_exchange, self.shard_id, self.consumer_group
+            )
         elif self.input_queue:
             self._consumer = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, self.input_queue)
         else:
@@ -84,6 +89,24 @@ class WorkerBase:
             self._producer = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, self.output_queue)
         else:
             self._producer = None
+
+    def _close_resources(self):
+        try:
+            if hasattr(self, "_consumer") and self._consumer is not None:
+                self._consumer.stop_consuming()
+                self._consumer.close()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "_producer") and self._producer is not None:
+                self._producer.close()
+        except Exception:
+            pass
+
+    def _reconnect_backoff(self, attempt: int):
+        delay = min(RECONNECT_DELAY * (2 ** attempt), RECONNECT_MAX_DELAY)
+        logger.warning(f"Reintentando conexion en {delay}s...")
+        time.sleep(delay)
 
     def _handle_sigterm(self, *_):
         logger.info("SIGTERM recibido -> cerrando")
@@ -137,10 +160,19 @@ class WorkerBase:
         if not rows:
             return
         body = json.dumps({"rows": rows}).encode()
-        if self.output_exchange and self.output_shards >= 1:
-            self._producer.send_to_shard(body, int(buf_key))
-        else:
-            self._producer.send(body)
+        try:
+            if self.output_exchange and self.output_shards >= 1:
+                self._producer.send_to_shard(body, int(buf_key))
+            else:
+                self._producer.send(body)
+        except (MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError):
+            self._close_resources()
+            _wait_for_rabbitmq()
+            self._setup_connections()
+            if self.output_exchange and self.output_shards >= 1:
+                self._producer.send_to_shard(body, int(buf_key))
+            else:
+                self._producer.send(body)
 
     def _flush_all(self):
         for key in list(self._buffer.keys()):
@@ -153,10 +185,19 @@ class WorkerBase:
         if client_id is not None:
             eof_msg["client_id"] = client_id
         eof_body = json.dumps(eof_msg).encode()
-        if self.output_exchange and self.output_shards >= 1:
-            self._producer.send_eof_to_all(eof_body)
-        else:
-            self._producer.send(eof_body)
+        try:
+            if self.output_exchange and self.output_shards >= 1:
+                self._producer.send_eof_to_all(eof_body)
+            else:
+                self._producer.send(eof_body)
+        except (MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError):
+            self._close_resources()
+            _wait_for_rabbitmq()
+            self._setup_connections()
+            if self.output_exchange and self.output_shards >= 1:
+                self._producer.send_eof_to_all(eof_body)
+            else:
+                self._producer.send(eof_body)
 
     # --- Loop principal ---------------------------------------------------------
 
@@ -173,7 +214,10 @@ class WorkerBase:
                     client_id = msg.get("client_id")
                     if client_id is None:
                         eof_count[0] += 1
-                        ack()
+                        logger.info(
+                            f"{self.__class__.__name__} EOF recibido "
+                            f"({eof_count[0]}/{self.n_upstream})"
+                        )
                         if eof_count[0] >= self.n_upstream:
                             for result in self.on_eof(None):
                                 self._emit([result])
@@ -181,10 +225,14 @@ class WorkerBase:
                             self._send_eof()
                             self._consumer.stop_consuming()
                             logger.info(f"{self.__class__.__name__} terminado")
+                        ack()
                         return
 
                     eof_per_client[client_id] = eof_per_client.get(client_id, 0) + 1
-                    ack()
+                    logger.info(
+                        f"{self.__class__.__name__} EOF recibido para client_id={client_id} "
+                        f"({eof_per_client[client_id]}/{self.n_upstream})"
+                    )
                     if eof_per_client[client_id] >= self.n_upstream and client_id not in done_clients:
                         for result in self.on_eof(client_id):
                             self._emit([result])
@@ -195,6 +243,7 @@ class WorkerBase:
                     if self.total_clients > 0 and len(done_clients) >= self.total_clients:
                         self._consumer.stop_consuming()
                         logger.info(f"{self.__class__.__name__} terminado")
+                    ack()
                     return
                 for row in msg.get("rows", []):
                     self._emit(self.process(row))
@@ -203,10 +252,20 @@ class WorkerBase:
                 logger.error(f"Error procesando mensaje: {e}")
                 nack()
 
-        try:
-            self._consumer.start_consuming(on_message)
-        except MessageMiddlewareDisconnectedError:
-            if self._running:
+        attempt = 0
+        while self._running:
+            try:
+                self._consumer.start_consuming(on_message)
+                break
+            except MessageMiddlewareDisconnectedError:
+                if not self._running:
+                    break
                 logger.error("Conexion perdida con RabbitMQ")
-        except Exception as e:
-            logger.error(f"Error inesperado en {self.__class__.__name__}: {e}")
+                self._close_resources()
+                _wait_for_rabbitmq()
+                self._reconnect_backoff(attempt)
+                self._setup_connections()
+                attempt += 1
+            except Exception as e:
+                logger.error(f"Error inesperado en {self.__class__.__name__}: {e}")
+                break

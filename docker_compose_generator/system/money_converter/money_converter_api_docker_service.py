@@ -1,23 +1,16 @@
-import os
 import yaml
 import copy
+import os
 
-# Configs files
-SUB_GRAPH_CONFIG_FILE = "sub_graph_agg_config.yaml"
-PATHS_CREATOR_CONFIG_FILE = "paths_creator_config.yaml"
-UNIQUE_PATHS_COUNTER_CONFIG_FILE = "unique_paths_counter_config.yaml"
-
-CONFIGS_FILES = {
-    "sub_graph_agg" : SUB_GRAPH_CONFIG_FILE,
-    "paths_creator" : PATHS_CREATOR_CONFIG_FILE,
-    "unique_paths_count" : UNIQUE_PATHS_COUNTER_CONFIG_FILE
-}
-
+# Config file
 BASE_DIR = os.path.dirname(__file__)
+CONFIG_FILE = os.path.join(BASE_DIR, "api_money_conversion_client_config.yaml")
 
 # Build section
 DOCKER_BUILD_SECTION_NAME = "build"
 DOCKER_BUILD_CONTEXT_SUBSECTION_NAME = "context"
+
+CONTEXT_FOLDER = "./src"
 
 # Container name
 CONTAINER_NAME_TAG = "container_name"
@@ -29,43 +22,35 @@ DOCKER_ENV_VARS_NAME = "environment"
 INPUT_QUEUE_TAG = "INPUT_QUEUE"
 INPUT_EXCHANGE_TAG = "INPUT_EXCHANGE"
 CONSUMER_GROUP_TAG = "CONSUMER_GROUP"
-N_UPSTREAM_TAG="N_UPSTREAM"
 SHARD_ID_TAG="SHARD_ID"
+N_UPSTREAM_TAG="N_UPSTREAM"
 OUTPUT_QUEUE_TAG = "OUTPUT_QUEUE"
 OUTPUT_EXCHANGE_TAG = "OUTPUT_EXCHANGE"
 
-TOTAL_CLIENTS_TAG = "TOTAL_CLIENTS"
 
-
-def get_scatter_gather_services(
-        service_prefix, 
-        total_instances, 
-        service_type, 
-        input_queue=None, input_exchange=None,
-        output_queue=None, output_exchange=None,
-        n_upstream=None, 
-        output_shards=None, 
-        total_clients=0
-        ):
-    # Open config file
-    config_file_name = os.path.join(BASE_DIR, CONFIGS_FILES[service_type])
-    with open(config_file_name, "r") as config_file:
-        base_scatter_gather_service = yaml.safe_load(config_file)
+def get_money_conversion_api_client_docker_services(service_prefix, total_instances,
+                                    input_queue=None, input_exchange=None,
+                                    output_queue=None, output_exchange=None,
+                                    n_upstream=1, output_shards=1):
+    with open(CONFIG_FILE, "r") as config_file:
+        base_money_conversion_service = yaml.safe_load(config_file)
 
     # Create all services
-    scatter_gather_services = {}
+    money_conversion_services = {}
 
     for i in range(total_instances):
         # Copy service base configuration
-        new_service_config = copy.deepcopy(base_scatter_gather_service)
+        new_service_config = copy.deepcopy(base_money_conversion_service)
 
         # Add container name
         new_service_name = f"{service_prefix}_{i}"
         new_service_config[CONTAINER_NAME_TAG] = new_service_name
 
+        # Add context folder
+        new_service_config[DOCKER_BUILD_SECTION_NAME][DOCKER_BUILD_CONTEXT_SUBSECTION_NAME] = CONTEXT_FOLDER
+
         # Add environment variables
-        if n_upstream is not None:
-            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{N_UPSTREAM_TAG}={n_upstream}")
+        new_service_config[DOCKER_ENV_VARS_NAME].append(f"{N_UPSTREAM_TAG}={n_upstream}")
 
         ## I/O
         if input_queue is not None:
@@ -82,10 +67,7 @@ def get_scatter_gather_services(
             if output_shards >= 1:
                 new_service_config[DOCKER_ENV_VARS_NAME].append(f"OUTPUT_SHARDS={output_shards}")
 
-        if total_clients > 0:
-            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{TOTAL_CLIENTS_TAG}={total_clients}")
-
         # Add service in services dictionary
-        scatter_gather_services[new_service_name] = new_service_config
+        money_conversion_services[new_service_name] = new_service_config
 
-    return scatter_gather_services
+    return money_conversion_services

@@ -8,13 +8,23 @@ import random
 import os   
 from common.middleware.middleware_sharded import ShardedExchangeProducer 
 
+
+def _normalize_bank_id(bank_id):
+    if bank_id is None:
+        return None
+    normalized = str(bank_id).strip()
+    normalized = normalized.lstrip("0")
+    return normalized or "0"
+
 def _update_bank_map(bank_maps, client_id, rows):
     bank_map = dict(bank_maps.get(client_id, {}))
     for row in rows:
         if len(row) < 2:
             continue
         bank_name, bank_id = row[0], row[1]
+        bank_id = str(bank_id).strip()
         bank_map[bank_id] = bank_name
+        bank_map[_normalize_bank_id(bank_id)] = bank_name
     bank_maps[client_id] = bank_map
 
 
@@ -28,6 +38,11 @@ def _rows_to_transactions(client_id, rows, transaction_columns):
         transaction["client_id"] = client_id
         transactions.append(transaction)
     return transactions
+
+
+def _chunks(items, size):
+    for index in range(0, len(items), size):
+        yield items[index:index + size]
 
 
 from common.middleware.middleware_sharded import ShardedExchangeProducer
@@ -53,6 +68,7 @@ def handle_client_request(
     handler = message_handler.MessageHandler()
     client_id = None
     output_shards = int(os.environ.get("OUTPUT_SHARDS", "1"))
+    gateway_output_batch_size = int(os.environ.get("GATEWAY_OUTPUT_BATCH_SIZE", "2000"))
     output = _build_output_queue(mom_host, output_queue, output_exchange, output_shards)
 
     try:
@@ -80,7 +96,7 @@ def handle_client_request(
                     raise ValueError("Client id mismatch in request stream")
 
             if msg_type == message_protocol.external.MsgType.ACCOUNTS_BATCH:
-                logging.info(f"Received accounts batch from client {client_id}")
+                logging.debug(f"Received accounts batch from client {client_id}")
                 _update_bank_map(bank_maps, client_id, rows)
                 message_protocol.external.send_msg(
                     client_socket,
@@ -112,15 +128,16 @@ def handle_client_request(
                 transactions = _rows_to_transactions(
                     client_id, rows, transaction_columns
                 )
-                serialized_message = handler.serialize_rows_message(
-                    client_id, transactions
-                )
-                
-                if isinstance(output, ShardedExchangeProducer):
-                    shard = random.randint(0, output_shards - 1)
-                    output.send_to_shard(serialized_message, shard)
-                else:
-                    output.send(serialized_message)
+                for transactions_chunk in _chunks(transactions, gateway_output_batch_size):
+                    serialized_message = handler.serialize_rows_message(
+                        client_id, transactions_chunk
+                    )
+
+                    if isinstance(output, ShardedExchangeProducer):
+                        shard = random.randint(0, output_shards - 1)
+                        output.send_to_shard(serialized_message, shard)
+                    else:
+                        output.send(serialized_message)
 
                 message_protocol.external.send_msg(
                     client_socket,

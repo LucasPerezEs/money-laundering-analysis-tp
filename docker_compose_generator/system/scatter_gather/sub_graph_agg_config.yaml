@@ -1,6 +1,6 @@
 build:
-  context: ./src/transactions_graph
-  dockerfile: Dockerfile
+  context: ./src/
+  dockerfile: transactions_graph/Dockerfile
 depends_on:
   rabbitmq:
     condition: service_healthy

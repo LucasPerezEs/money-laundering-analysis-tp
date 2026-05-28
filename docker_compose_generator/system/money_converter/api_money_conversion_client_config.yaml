@@ -1,9 +1,13 @@
 build:
   context: ./src
-  dockerfile: unique_paths_counter/Dockerfile
+  dockerfile: money_converter/Dockerfile
 depends_on:
   rabbitmq:
     condition: service_healthy
+container_name: money_converter_api_client
+entrypoint:
+- python3
+- money_converter_api.py
 environment:
 - MOM_HOST=rabbitmq
 - PYTHONUNBUFFERED=1
