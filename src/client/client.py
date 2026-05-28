@@ -18,6 +18,17 @@ CLIENT_ID = str(os.environ["CLIENT_ID"])
 
 RESULTS_DIR = os.environ.get("RESULTS_DIR", "/results")
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "1000"))
+PROGRESS_LOG_EVERY = int(os.environ.get("PROGRESS_LOG_EVERY", "500000"))
+TRANSACTION_COLUMNS = [
+    "Timestamp",
+    "From Bank",
+    "Account",
+    "To Bank",
+    "Account.1",
+    "Amount Paid",
+    "Payment Currency",
+    "Payment Format",
+]
 
 
 class Client:
@@ -107,8 +118,10 @@ class Client:
             logging.error(traceback.format_exc())
             raise
 
-    def _send_rows_in_batches(self, rows, msg_type):
+    def _send_rows_in_batches(self, rows, msg_type, progress_label=None):
         batch = []
+        total_sent = 0
+        next_progress_log = PROGRESS_LOG_EVERY
         for row in rows:
             batch.append(row)
             if len(batch) >= self.batch_size:
@@ -117,6 +130,10 @@ class Client:
                     self.server_socket, msg_type, self.client_id, batch
                 )
                 self._expect_ack()
+                total_sent += len(batch)
+                if progress_label and total_sent >= next_progress_log:
+                    logging.info(f"Sent {total_sent} {progress_label} rows to gateway")
+                    next_progress_log += PROGRESS_LOG_EVERY
                 batch = []
 
         if batch:
@@ -125,6 +142,27 @@ class Client:
                 self.server_socket, msg_type, self.client_id, batch
             )
             self._expect_ack()
+            total_sent += len(batch)
+
+        if progress_label:
+            logging.info(f"Finished sending {total_sent} {progress_label} rows to gateway")
+
+    def _transaction_rows(self, csv_reader):
+        raw_headers = next(csv_reader, [])
+        seen_headers = {}
+        headers = []
+        for header in raw_headers:
+            count = seen_headers.get(header, 0)
+            headers.append(header if count == 0 else f"{header}.{count}")
+            seen_headers[header] = count + 1
+
+        column_indexes = [headers.index(column) for column in TRANSACTION_COLUMNS]
+
+        for row in csv_reader:
+            if len(row) < len(headers):
+                logging.warning("Transaction row has unexpected length %s", len(row))
+                continue
+            yield [row[index] for index in column_indexes]
 
     def send_accounts_and_transactions(self):
         logging.info("Sending accounts in batches")
@@ -133,7 +171,9 @@ class Client:
             next(csv_reader, None)
             rows = ([row[0], row[1]] for row in csv_reader if len(row) >= 2)
             self._send_rows_in_batches(
-                rows, message_protocol.external.MsgType.ACCOUNTS_BATCH
+                rows,
+                message_protocol.external.MsgType.ACCOUNTS_BATCH,
+                "account",
             )
 
         logging.info("Finished sending accounts")
@@ -147,10 +187,10 @@ class Client:
         logging.info("Sending transactions in batches")
         with open(self.transactions_file, newline="\n") as csvfile:
             csv_reader = csv.reader(csvfile, delimiter=",", quotechar='"')
-            next(csv_reader, None)
-            rows = (row[:-1] for row in csv_reader if len(row) >= 2)
             self._send_rows_in_batches(
-                rows, message_protocol.external.MsgType.TRANSACTIONS_BATCH
+                self._transaction_rows(csv_reader),
+                message_protocol.external.MsgType.TRANSACTIONS_BATCH,
+                "transaction",
             )
 
         logging.info("Finished sending transactions")

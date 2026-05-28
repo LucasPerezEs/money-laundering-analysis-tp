@@ -12,9 +12,9 @@ services:
     - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
     - SERVER_PORT=7659
-    - BATCH_SIZE=20000
-    - TRANSACTIONS_FILE=/datasets/LI-Small_Trans.csv
-    - ACCOUNTS_FILE=/datasets/LI-Small_accounts.csv
+    - BATCH_SIZE=50000
+    - TRANSACTIONS_FILE=/datasets/transactions_1M.csv
+    - ACCOUNTS_FILE=/datasets/accounts_1M.csv
     - CLIENT_ID=0
     - RESULTS_DIR=/results
     volumes:
@@ -43,8 +43,8 @@ services:
     - QUERY_3_N_UPSTREAM=3
     - QUERY_4_N_UPSTREAM=1
     - QUERY_5_N_UPSTREAM=1
-    - TRANSACTION_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1,Amount Received,Receiving
-      Currency,Amount Paid,Payment Currency,Payment Format
+    - TRANSACTION_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1,Amount Paid,Payment
+      Currency,Payment Format
   q1_data_reducer_0:
     build:
       context: ./src
@@ -373,7 +373,7 @@ services:
     - MAIN_N_UPSTREAM=3
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
-    - BATCH_SIZE=5000
+    - BATCH_SIZE=10000
   q3_avg_and_transactions_joiner_1:
     build:
       context: ./src
@@ -395,7 +395,7 @@ services:
     - MAIN_N_UPSTREAM=3
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
-    - BATCH_SIZE=5000
+    - BATCH_SIZE=10000
   q3_avg_and_transactions_joiner_2:
     build:
       context: ./src
@@ -417,7 +417,7 @@ services:
     - MAIN_N_UPSTREAM=3
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
-    - BATCH_SIZE=5000
+    - BATCH_SIZE=10000
   q3_data_reducer_0:
     build:
       context: ./src
@@ -938,7 +938,7 @@ services:
     - OUTPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
-    - SHARD_KEY_FIELDS=From Bank,Account,To Bank,Account.1
+    - SHARD_KEY_FIELDS=From Bank,Account
   q4_splitters_by_origin_and_dest_prefix_1:
     build:
       context: ./src
@@ -959,7 +959,7 @@ services:
     - OUTPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
-    - SHARD_KEY_FIELDS=From Bank,Account,To Bank,Account.1
+    - SHARD_KEY_FIELDS=From Bank,Account
   q4_splitters_by_origin_and_dest_prefix_2:
     build:
       context: ./src
@@ -980,7 +980,7 @@ services:
     - OUTPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
-    - SHARD_KEY_FIELDS=From Bank,Account,To Bank,Account.1
+    - SHARD_KEY_FIELDS=From Bank,Account
   q4_transaction_graph_0:
     build:
       context: ./src/
@@ -1065,6 +1065,7 @@ services:
     - CONSUMER_GROUP=q4_unique_paths_counters
     - SHARD_ID=0
     - OUTPUT_QUEUE=results_4
+    - TOTAL_CLIENTS=1
     - BATCH_SIZE=1000
   q5_counter_0:
     build:
@@ -1398,6 +1399,8 @@ services:
     ports:
     - 5672:5672
     - 15672:15672
+    tmpfs:
+    - /var/lib/rabbitmq
   usd_filter_0:
     build:
       context: ./src

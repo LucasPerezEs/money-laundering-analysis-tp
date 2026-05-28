@@ -21,38 +21,29 @@ class UniquePathsCounter(WorkerBase):
 
     def __init__(self):
         super().__init__()
-        # Create storage for intermediate nodes
-        self.intermediate_nodes_by_client_id = {}
+        self.path_counts_by_client_id = {}
 
     # Process data message
     def process(self, data):
-        # Get paths counter
         logging.debug("Leo nuevo camino")
         client_id = data["client_id"]
-        intermediate_nodes = self.intermediate_nodes_by_client_id.get(client_id)
-        if intermediate_nodes is None:
-            intermediate_nodes = {}
-            self.intermediate_nodes_by_client_id[client_id] = intermediate_nodes
+        path_counts = self.path_counts_by_client_id.get(client_id)
+        if path_counts is None:
+            path_counts = {}
+            self.path_counts_by_client_id[client_id] = path_counts
 
-        # Path start
         start_node = transaction_id.TransactionID(
                         data[TRANSACTION_ORIGIN_BANK_KEY],
                         data[TRANSACTION_ORIGIN_ACC_KEY])
 
-        # Path intermediate node
-        intermediate_node = transaction_id.TransactionID(
-                            data[TRANSACTION_INTERMEDIATE_BANK_KEY],
-                            data[TRANSACTION_INTERMEDIATE_ACC_KEY])
-
-        # Path end
         end_node = transaction_id.TransactionID(
                         data[TRANSACTION_DESTINATION_BANK_KEY],
                         data[TRANSACTION_DESTINATION_ACC_KEY])
 
-        # Add intermediate node
-        intermediate_accs_set = intermediate_nodes.get((start_node, end_node), set())
-        intermediate_accs_set.add(intermediate_node)
-        intermediate_nodes[(start_node, end_node)] = intermediate_accs_set
+        if start_node != end_node:
+            path_counts[(start_node, end_node)] = (
+                path_counts.get((start_node, end_node), 0) + 1
+            )
 
         return []
 
@@ -60,15 +51,11 @@ class UniquePathsCounter(WorkerBase):
     # Process EOF
     def on_eof(self, client_id=None):
         logging.info(f"EOF received for client_id={client_id}")
-        intermediate_nodes = self.intermediate_nodes_by_client_id.pop(client_id, {})
+        path_counts = self.path_counts_by_client_id.pop(client_id, {})
 
-        # For each node with incoming edges
         matching_accounts = set()
-        for (start_node, end_node) in intermediate_nodes:
-            if start_node == end_node:
-                continue
-
-            if len(intermediate_nodes[(start_node, end_node)]) <= MIN_TOTAL_PATHS:
+        for (start_node, end_node), total_paths in path_counts.items():
+            if total_paths <= MIN_TOTAL_PATHS:
                 continue
 
             matching_accounts.add(start_node)

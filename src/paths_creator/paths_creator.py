@@ -52,13 +52,13 @@ class PathsCreator(WorkerBase):
         # or if it is an "outgoing" edge, where the origin node is stored here
         if tag == "i":
             if destination not in incoming_edges:
-                incoming_edges[destination] = set()
-            incoming_edges[destination].add(origin)
+                incoming_edges[destination] = []
+            incoming_edges[destination].append(origin)
             logging.debug("Arista de entrada guardada")
         else:
             if origin not in outgoing_edges:
-                outgoing_edges[origin] = set()
-            outgoing_edges[origin].add(destination)
+                outgoing_edges[origin] = []
+            outgoing_edges[origin].append(destination)
             logging.debug("Arista de salida guardada")
 
         return []

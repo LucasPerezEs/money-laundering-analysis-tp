@@ -29,20 +29,24 @@ def _update_bank_map(bank_maps, client_id, rows):
 
 
 def _rows_to_transactions(client_id, rows, transaction_columns):
-    transactions = []
     for row in rows:
         if len(row) != len(transaction_columns):
             logging.warning("Transaction row has unexpected length %s", len(row))
             continue
         transaction = dict(zip(transaction_columns, row))
         transaction["client_id"] = client_id
-        transactions.append(transaction)
-    return transactions
+        yield transaction
 
 
 def _chunks(items, size):
-    for index in range(0, len(items), size):
-        yield items[index:index + size]
+    chunk = []
+    for item in items:
+        chunk.append(item)
+        if len(chunk) >= size:
+            yield chunk
+            chunk = []
+    if chunk:
+        yield chunk
 
 
 from common.middleware.middleware_sharded import ShardedExchangeProducer
@@ -124,7 +128,7 @@ def handle_client_request(
             if msg_type == message_protocol.external.MsgType.TRANSACTIONS_BATCH:
                 if output is None:
                     output = _build_output_queue(mom_host, output_queue, output_exchange)
-                logging.info(f"Received transactions batch from client {client_id}")
+                logging.debug(f"Received transactions batch from client {client_id}")
                 transactions = _rows_to_transactions(
                     client_id, rows, transaction_columns
                 )

@@ -79,7 +79,7 @@ def generate_system_docker_compose(total_clients=0):
         gateway["gateway"]["environment"].append(f"QUERY_5_N_UPSTREAM={q5_totals_sumer_instances}")
         gateway["gateway"]["environment"].append(
             "TRANSACTION_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1,"
-            "Amount Received,Receiving Currency,Amount Paid,Payment Currency,Payment Format"
+            "Amount Paid,Payment Currency,Payment Format"
         )
         system = system | gateway
 
@@ -234,7 +234,7 @@ def generate_system_docker_compose(total_clients=0):
             output_queue="results_3",
         )
         for name, config in q3_avg_and_transactions_joiner.items():
-            config["environment"].append("BATCH_SIZE=5000")
+            config["environment"].append("BATCH_SIZE=10000")
         system = system | q3_avg_and_transactions_joiner
 
         # =========================================================
@@ -263,12 +263,12 @@ def generate_system_docker_compose(total_clients=0):
         )
         system = system | q4_filters_01092022_05092022
 
-        # Split by origin and destination accounts
+        # Split by origin account so each worker can count distinct destinations.
         q4_splitters_by_origin_and_dest = get_splitter_docker_services(
             q4_splitters_by_origin_and_dest_prefix, q4_splitters_by_origin_and_dest_instances,
             input_exchange="q4_splitter_exc",
             output_exchange="q4_split_by_origin_and_dest_exc",
-            key_fields=["From Bank", "Account", "To Bank", "Account.1"],
+            key_fields=["From Bank", "Account"],
             n_upstream=q4_filter_01092022_05092022_instances,
             output_shards=q4_transaction_graph_instances,
         )
@@ -315,6 +315,7 @@ def generate_system_docker_compose(total_clients=0):
             input_exchange="q4_unique_paths_counter_exc",
             output_queue="results_4",
             n_upstream=q4_paths_splitters_by_ends_instances,
+            total_clients=total_clients,
         )
         for name, config in q4_unique_paths_counters.items():
             config["environment"].append("BATCH_SIZE=1000")

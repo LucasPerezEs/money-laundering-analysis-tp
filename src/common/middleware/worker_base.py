@@ -256,8 +256,16 @@ class WorkerBase:
         while self._running:
             try:
                 self._consumer.start_consuming(on_message)
+                if self._running:
+                    logger.warning("El consumo finalizo inesperadamente; reconectando")
+                    self._close_resources()
+                    _wait_for_rabbitmq()
+                    self._reconnect_backoff(attempt)
+                    self._setup_connections()
+                    attempt += 1
+                    continue
                 break
-            except MessageMiddlewareDisconnectedError:
+            except (MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError):
                 if not self._running:
                     break
                 logger.error("Conexion perdida con RabbitMQ")

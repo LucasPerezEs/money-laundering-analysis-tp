@@ -197,12 +197,19 @@ def serial_q4(rows):
              if r["payment_currency"] == "US Dollar"
              and in_period(r["timestamp"], "2022-09-01", "2022-09-05")]
 
+    destinations_by_origin = defaultdict(set)
+    for r in usd_a:
+        origin = (r["from_bank"], r["from_account"])
+        destination = (r["to_bank"], r["to_account"])
+        destinations_by_origin[origin].add(destination)
+
     edges = [
         (
             (r["from_bank"], r["from_account"]),
             (r["to_bank"], r["to_account"]),
         )
         for r in usd_a
+        if len(destinations_by_origin[(r["from_bank"], r["from_account"])]) > 5
     ]
 
     outgoing_by_node = defaultdict(list)

@@ -11,6 +11,8 @@ rabbitmq:
     start_period: 50s
     test: rabbitmq-diagnostics check_port_connectivity
     timeout: 3s
+  tmpfs:
+  - /var/lib/rabbitmq
   ports:
   - 5672:5672
   - 15672:15672
