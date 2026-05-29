@@ -1,3 +1,22 @@
+"""
+TransactionsGraphAgg:
+
+Este worker recibe transacciones USD ya restringidas a la ventana temporal de
+Q4 y shardeadas por cuenta origen. Durante el stream guarda las transacciones
+de cada cliente y registra las cuentas destino distintas alcanzadas por cada
+origen.
+
+Al recibir EOF conserva solamente los origenes que transfirieron a mas de cinco
+cuentas destino distintas. 
+
+Cada transaccion que pasa ese filtro se emite dos veces:
+- como vista de entrada, ruteada por la cuenta destino;
+- como vista de salida, ruteada por la cuenta origen.
+
+La etapa siguiente (`PathsCreator`) recibe ambas vistas para una misma cuenta
+intermediaria y materializa caminos de dos saltos:
+origen -> intermediaria -> destino.
+"""
 import logging
 import hashlib
 
@@ -17,6 +36,7 @@ MIN_DISTINCT_DESTINATIONS = 5
 
 
 class TransactionsGraphAgg(WorkerBase):
+    """Filtra transacciones Q4 por origen activo y emite aristas de entrada/salida."""
 
     def __init__(self):
         super().__init__()

@@ -1,9 +1,17 @@
-import os
-import logging
-import signal
-import time
+"""
+UniquePathsCounter:
 
-from common import middleware, message_protocol, transaction_id
+Este worker recibe caminos de dos saltos ya materializados y shardeados por el
+par de extremos `(From Bank, Account, To Bank, Account.1)`. Cuenta cuantos
+caminos existen para cada par de extremos, preservando la multiplicidad de las
+etapas anteriores.
+
+Al recibir EOF conserva los pares de extremos con mas de cinco caminos y emite
+las cuentas origen y destino unicas involucradas en esos pares.
+"""
+import logging
+
+from common import transaction_id
 from common.middleware.worker_base import WorkerBase
 
 # Constants
@@ -18,6 +26,7 @@ TOTAL_PATHS_KEY = "Total Paths"
 MIN_TOTAL_PATHS = 5
 
 class UniquePathsCounter(WorkerBase):
+    """Cuenta caminos Q4 por par de extremos y emite las cuentas calificadas."""
 
     def __init__(self):
         super().__init__()

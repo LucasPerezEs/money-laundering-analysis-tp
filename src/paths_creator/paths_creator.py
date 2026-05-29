@@ -1,9 +1,24 @@
-import os
-import logging
-import signal
-import time
+"""
+PathCreator:
 
-from common import middleware, message_protocol, transaction_id
+Este worker recibe las dos vistas de aristas emitidas por
+`TransactionsGraphAgg`:
+
+- las aristas de entrada se agrupan por su cuenta destino/intermediaria;
+- las aristas de salida se agrupan por su cuenta origen/intermediaria.
+
+Como ambas vistas se rutean por la misma cuenta intermediaria, este worker puede
+hacer el join localmente. Al recibir EOF emite todos los caminos con la forma:
+
+    origin -> intermediate -> destination
+
+Se usan listas intencionalmente en lugar de sets para que las transacciones
+repetidas preserven la misma multiplicidad que el merge de pandas usado en el
+notebook de referencia.
+"""
+import logging
+
+from common import transaction_id
 from common.middleware.worker_base import WorkerBase
 
 # Constants
@@ -17,6 +32,7 @@ TRANSACTION_INTERMEDIATE_BANK_KEY = "Interm Bank"
 TRANSACTION_INTERMEDIATE_ACC_KEY = "Interm Acc"
 
 class PathsCreator(WorkerBase):
+    """Une vistas de entrada/salida y emite caminos Q4 de dos saltos."""
 
     def __init__(self):
         super().__init__()
