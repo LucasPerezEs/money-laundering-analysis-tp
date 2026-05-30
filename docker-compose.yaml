@@ -109,7 +109,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q1_reduced_exc
     - CONSUMER_GROUP=q1_filter_lt_50
@@ -130,7 +129,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q1_reduced_exc
     - CONSUMER_GROUP=q1_filter_lt_50
@@ -369,7 +367,6 @@ services:
     - CONSUMER_GROUP=q3_avg_and_transactions_joiner
     - SHARD_ID=0
     - SECONDARY_INPUT_EXCHANGE=q3_avg_preceding_period_exc
-    - SHARD_ID=0
     - MAIN_N_UPSTREAM=3
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
@@ -391,7 +388,6 @@ services:
     - CONSUMER_GROUP=q3_avg_and_transactions_joiner
     - SHARD_ID=1
     - SECONDARY_INPUT_EXCHANGE=q3_avg_preceding_period_exc
-    - SHARD_ID=1
     - MAIN_N_UPSTREAM=3
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
@@ -413,7 +409,6 @@ services:
     - CONSUMER_GROUP=q3_avg_and_transactions_joiner
     - SHARD_ID=2
     - SECONDARY_INPUT_EXCHANGE=q3_avg_preceding_period_exc
-    - SHARD_ID=2
     - MAIN_N_UPSTREAM=3
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
@@ -479,7 +474,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q3_reduced_data_exc
     - CONSUMER_GROUP=q3_filter_01092022_05092022
@@ -499,7 +493,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q3_reduced_data_exc
     - CONSUMER_GROUP=q3_filter_01092022_05092022
@@ -519,7 +512,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q3_reduced_data_exc
     - CONSUMER_GROUP=q3_filter_01092022_05092022
@@ -539,7 +531,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q3_reduced_data_exc
     - CONSUMER_GROUP=q3_filter_06092022_15092022
@@ -560,7 +551,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q3_reduced_data_exc
     - CONSUMER_GROUP=q3_filter_06092022_15092022
@@ -581,7 +571,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q3_reduced_data_exc
     - CONSUMER_GROUP=q3_filter_06092022_15092022
@@ -716,7 +705,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q4_reduced_data_exc
     - CONSUMER_GROUP=q4_filter_01092022_05092022_prefix
@@ -736,7 +724,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q4_reduced_data_exc
     - CONSUMER_GROUP=q4_filter_01092022_05092022_prefix
@@ -756,7 +743,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q4_reduced_data_exc
     - CONSUMER_GROUP=q4_filter_01092022_05092022_prefix
@@ -1162,7 +1148,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=2
     - INPUT_EXCHANGE=q5_reduced_exc
     - CONSUMER_GROUP=q5_filter_01092022_05092022
@@ -1181,7 +1166,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=2
     - INPUT_EXCHANGE=q5_reduced_exc
     - CONSUMER_GROUP=q5_filter_01092022_05092022
@@ -1200,7 +1184,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=2
     - INPUT_EXCHANGE=q5_reduced_exc
     - CONSUMER_GROUP=q5_filter_01092022_05092022
@@ -1219,7 +1202,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=1
     - INPUT_EXCHANGE=q5_converted_amounts_exc
     - CONSUMER_GROUP=q5_filter_lt_1_usd
@@ -1240,7 +1222,6 @@ services:
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=1
-    - N_UPSTREAM=1
     - INPUT_EXCHANGE=q5_converted_amounts_exc
     - CONSUMER_GROUP=q5_filter_lt_1_usd
     - SHARD_ID=1
@@ -1259,7 +1240,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=1
     - INPUT_EXCHANGE=q5_converted_amounts_exc
     - CONSUMER_GROUP=q5_filter_lt_1_usd
@@ -1316,7 +1296,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q5_small_amounts_exc
     - CONSUMER_GROUP=q5_payment_fmt_filter
@@ -1336,7 +1315,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q5_small_amounts_exc
     - CONSUMER_GROUP=q5_payment_fmt_filter
@@ -1356,7 +1334,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=3
     - INPUT_EXCHANGE=q5_small_amounts_exc
     - CONSUMER_GROUP=q5_payment_fmt_filter
@@ -1399,8 +1376,6 @@ services:
     ports:
     - 5672:5672
     - 15672:15672
-    tmpfs:
-    - /var/lib/rabbitmq
   usd_filter_0:
     build:
       context: ./src
@@ -1411,7 +1386,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=1
     - INPUT_EXCHANGE=gateway_exc
     - CONSUMER_GROUP=usd_filter
@@ -1432,7 +1406,6 @@ services:
         condition: service_healthy
     environment:
     - RABBITMQ_HOST=rabbitmq
-    - N_UPSTREAM=1
     - N_UPSTREAM=1
     - INPUT_EXCHANGE=gateway_exc
     - CONSUMER_GROUP=usd_filter

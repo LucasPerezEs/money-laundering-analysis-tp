@@ -60,7 +60,8 @@ def get_barrier_filters_services(service_prefix, total_instances,
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SEC_INPUT_EXCHANGE_TAG}={sec_input_exchange}")
             if main_input_exchange is None:
                 new_service_config[DOCKER_ENV_VARS_NAME].append(f"{CONSUMER_GROUP_TAG}={service_prefix}")
-            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SHARD_ID_TAG}={i}")
+            if not any(SHARD_ID_TAG in elem for elem in new_service_config[DOCKER_ENV_VARS_NAME]):
+                new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SHARD_ID_TAG}={i}")
 
         if main_n_upstream is not None:
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{MAIN_N_UPSTREAM_TAG}={main_n_upstream}")
