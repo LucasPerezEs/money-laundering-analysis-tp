@@ -151,76 +151,65 @@ class FilterWorker(WorkerBase):
             "endswith": lambda a, b: str(a).endswith(str(b)),
         }
         self.op_func = self._ops.get(FILTER_OP, self._ops["eq"])
+        self._evaluate = self._build_evaluator()
 
         logger.info(f"Initialized FilterWorker with FILTER_FIELD='{FILTER_FIELD}', FILTER_OP='{FILTER_OP}', FILTER_VALUE='{FILTER_VALUE}', DROP_FILTER_FIELD={self.drop_filter_field}")
 
         super().__init__()
 
 
-    def _maybe_drop_field(self, data: dict):
-        """Drop the configured filter field from data in-place if enabled."""
-        if not self.drop_filter_field:
-            return
-        try:
-            data.pop(self.filter_field_key, None)
-        except Exception:
-            logger.exception("Error al dropear el campo de filtro")
+    def _build_evaluator(self):
+        if self._is_date_range:
+            def eval_date_range(target):
+                target_date = parse_date(target)
+                if not isinstance(target_date, datetime.date):
+                    return False
+                return self._date_start <= target_date <= self._date_end
+            return eval_date_range
+
+        if self._value_set is not None:
+            value_set_str = {str(v) for v in self._value_set}
+            def eval_in(target):
+                return (target in self._value_set) or (str(target) in value_set_str)
+            return eval_in
+
+        is_int = isinstance(self.filter_value, int)
+        is_float = isinstance(self.filter_value, float)
+        is_date = isinstance(self.filter_value, datetime.date)
+
+        def eval_common_op(target):
+            target_cast = target
+            try:
+                if is_int:
+                    try:
+                        target_cast = int(target)
+                    except ValueError:
+                        target_cast = float(str(target).replace(",", "."))
+                elif is_float:
+                    target_cast = float(str(target).replace(",", "."))
+                elif is_date:
+                    target_datetime = parse_date(target)
+                    if isinstance(target_datetime, datetime.date):
+                        target_cast = target_datetime
+            except Exception:
+                pass
+            
+            try:
+                return self.op_func(target_cast, self.filter_value)
+            except Exception:
+                return False
+
+        return eval_common_op
 
 
     def process(self, data: dict):
-        """Recibe fila dict. Devuelve [data] si cumple, [] si no. Lanza errores para WorkerBase."""
-        
-        if not isinstance(data, dict):
-            raise TypeError("Se esperaba dict como input para el filtro")
-        
-        if "client_id" not in data:
-            logger.warning("client_id no encontrado en data")
-        
-        target = _extract_target(data, self.filter_field_key)
+        target = data[self.filter_field_key] 
 
-        # date-range matching (requires FILTER_OP == 'in' by init check)
-        if self._is_date_range:
-            if _target_matches_date_range(target, self._date_start, self._date_end):
-                self._maybe_drop_field(data)
-                logger.debug(f"Row matches date range filter: {target} in [{self._date_start}, {self._date_end}]")
-                return [data]
-            return []
-
-        # explicit value set membership
-        if self._value_set is not None:
-            if _target_in_value_set(target, self._value_set):
-                self._maybe_drop_field(data)
-                logger.debug(f"Row matches value set filter: {target} in {self._value_set}")
-                return [data]
-            return []
-
-        # regular comparison
-        target_cast = target
-        try:
-            if isinstance(self.filter_value, int):
-                try:
-                    target_cast = int(target)
-                except Exception:
-                    target_cast = float(str(target).replace(",", "."))
-            elif isinstance(self.filter_value, float):
-                target_cast = float(str(target).replace(",", "."))
-            elif isinstance(self.filter_value, datetime.date):
-                dt = parse_date(target)
-                if isinstance(dt, datetime.date):
-                    target_cast = dt
-        except Exception:
-            target_cast = target
-
-        try:
-            if self.op_func(target_cast, self.filter_value):
-                self._maybe_drop_field(data)
-                logger.debug(f"Row matches filter: {target_cast} {FILTER_OP} {self.filter_value}")
-                return [data]
-            return []
-        except Exception:
-            logger.exception("Error evaluating filter")
-            return []
-
+        if self._evaluate(target):
+            if self.drop_filter_field:
+                data.pop(self.filter_field_key, None)
+            return [data]
+        return []
 
     def on_eof(self, client_id=None):
         logger.info("EOF received for client_id=%s", client_id)

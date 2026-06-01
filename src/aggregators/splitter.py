@@ -10,8 +10,7 @@ Variables de entorno:
 """
 import logging
 import os
-import hashlib
-
+import zlib
 
 from common.middleware.worker_base import WorkerBase
 
@@ -27,23 +26,21 @@ class Splitter(WorkerBase):
         multi  = os.environ.get("SHARD_KEY_FIELDS", "")
         if multi:
             self._key_fields = [f.strip() for f in multi.split(",") if f.strip()]
+            self._extract_bytes = lambda msg: "".join(str(msg.get(f, "")) for f in self._key_fields).encode("utf-8")
         elif single:
-            self._key_fields = [single]
+            field = single.strip()
+            self._extract_bytes = lambda msg: str(msg.get(field, "")).encode("utf-8")
         else:
             raise ValueError("Se requiere SHARD_KEY_FIELD o SHARD_KEY_FIELDS")
         self._tag_source = os.environ.get("TAG_SOURCE", "")
 
-    def _shard_key(self, msg: dict) -> str:
-        return "".join(str(msg.get(f, "")) for f in self._key_fields)
-
     def _routing_key(self, msg: dict) -> str:
-        key = self._shard_key(msg).encode()
-        shard = int(hashlib.md5(key).hexdigest(), 16) % self.output_shards
+        shard = zlib.crc32(self._extract_bytes(msg)) % self.output_shards
         return str(shard)
 
     def process(self, data: dict) -> list:
         if self._tag_source:
-            data = {**data, "source": self._tag_source}
+            data["source"] = self._tag_source
         return [data]
 
     def on_eof(self, client_id=None):

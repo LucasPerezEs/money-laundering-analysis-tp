@@ -41,17 +41,13 @@ class DataReducer(WorkerBase):
 
     def process(self, data: dict):
         """Recibe una fila (dict). Devuelve [reduced_dict] con solo las claves indicadas."""
-        if not isinstance(data, dict):
-            raise TypeError("Data debe ser dict")
 
         # Si alguna clave no existe, propagamos KeyError para que WorkerBase pueda manejarla
         reduced = {k: data[k] for k in self.keep_columns}
         if "client_id" in data:
             reduced["client_id"] = data["client_id"]
         else:
-            logger.warning("client_id no encontrado en data, no se incluirá en el resultado reducido")
-        
-        logger.debug(f"Reducing data {data} to {reduced}")
+            logger.info("client_id no encontrado en data, no se incluirá en el resultado reducido")
         return [reduced]
 
     def on_eof(self, client_id=None):
