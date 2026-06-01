@@ -39,9 +39,9 @@ def main():
     # Diccionarios estándar y el Lock
     client_sockets = {}
     bank_maps = {}
-    client_ready = {}
     client_query_eofs = {}
-    send_lock = threading.Lock()
+    client_ready_events = {} 
+    client_outboxes = {}
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -63,15 +63,13 @@ def main():
                 "client_sockets": client_sockets,
                 "bank_maps": bank_maps,
                 "client_query_eofs": client_query_eofs,
-                "client_ready": client_ready,
+                "client_outboxes": client_outboxes,
                 "mom_host": MOM_HOST,
                 "query_id": index,
                 "total_queries": TOTAL_QUERIES,
-                "send_lock": send_lock,
                 "n_upstream": n_upstream
             }
         )
-
         t.daemon = True
         t.start()
 
@@ -81,7 +79,6 @@ def main():
     while True:
         try:
             client_socket, addr = server_socket.accept()
-
             logging.info(f"A new client has connected from {addr}")
 
             t = threading.Thread(
@@ -90,7 +87,8 @@ def main():
                     client_socket,
                     client_sockets,
                     bank_maps,
-                    client_ready,
+                    client_ready_events,
+                    client_outboxes,
                     MOM_HOST,
                     OUTPUT_QUEUE,
                     OUTPUT_EXCHANGE,

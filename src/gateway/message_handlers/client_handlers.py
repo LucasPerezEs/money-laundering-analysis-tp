@@ -1,6 +1,8 @@
 import logging
 import traceback
 import socket
+import threading
+import queue
 
 from message_handlers import message_handler
 from common import middleware, message_protocol
@@ -59,11 +61,59 @@ def _build_output_queue(mom_host, output_queue, output_exchange, output_shards=1
     raise Exception("FATAL: no output given for data processing")
 
 
+def client_dispatcher(client_id, client_socket, outbox, ready_event):
+    ready_event.wait() 
+
+    while True:
+        try:
+            msg_type, payload = outbox.get()
+
+            if msg_type == "ROWS":
+                query_id, rows = payload
+                message_protocol.external.send_msg(
+                    client_socket, 
+                    message_protocol.external.MsgType.QUERY_RESULT_BATCH, 
+                    client_id, 
+                    query_id, 
+                    rows
+                )
+                
+            elif msg_type == "END_QUERY":
+                query_id = payload
+                message_protocol.external.send_msg(
+                    client_socket, 
+                    message_protocol.external.MsgType.END_QUERY, 
+                    client_id, 
+                    query_id
+                )
+                
+            elif msg_type == "END_RESULTS":
+                message_protocol.external.send_msg(
+                    client_socket, 
+                    message_protocol.external.MsgType.END_RESULTS, 
+                    client_id
+                )
+                msg_type_ack, ack_payload = message_protocol.external.recv_msg(client_socket)
+                break 
+
+            msg_type_ack, ack_payload = message_protocol.external.recv_msg(client_socket)
+            if msg_type_ack != message_protocol.external.MsgType.ACK or ack_payload != client_id:
+                logging.error(f"Error de ACK en despachador para {client_id}")
+                break
+
+        except Exception as e:
+            logging.error(f"Error enviando al cliente {client_id}: {e}")
+            break
+
+    client_socket.close()
+
+
 def handle_client_request(
     client_socket,
     client_sockets,
     bank_maps,
-    client_ready,
+    client_ready_events,
+    client_outboxes,
     mom_host,
     output_queue,
     output_exchange,
@@ -82,8 +132,8 @@ def handle_client_request(
                 msg_type, payload = message_protocol.external.recv_msg(client_socket)
             except Exception as e:
                 if client_id is None and "0 bytes" in str(e):
-                    logging.warning("Conexión cerrada sin enviar datos (health probe o timeout del cliente).")
-                    client_socket.close() # Cerramos acá porque el cliente se fue antes de identificarse
+                    logging.warning("Conexión cerrada sin enviar datos.")
+                    client_socket.close() 
                     return
                 raise e
 
@@ -95,91 +145,91 @@ def handle_client_request(
                 if client_id is None:
                     client_id = msg_client_id
                     client_sockets[client_id] = client_socket
-                    client_ready[client_id] = False
+                    client_ready_events[client_id] = threading.Event()
+                    client_outboxes[client_id] = queue.Queue()
+
+                    t_disp = threading.Thread(
+                        target=client_dispatcher,
+                        args=(client_id, client_socket, client_outboxes[client_id], client_ready_events[client_id])
+                    )
+                    t_disp.daemon = True
+                    t_disp.start()
+                    
                 elif msg_client_id != client_id:
                     raise ValueError("Client id mismatch in request stream")
 
             if msg_type == message_protocol.external.MsgType.ACCOUNTS_BATCH:
-                logging.debug(f"Received accounts batch from client {client_id}")
                 _update_bank_map(bank_maps, client_id, rows)
-                message_protocol.external.send_msg(
-                    client_socket,
-                    message_protocol.external.MsgType.ACK,
-                    client_id,
-                )
+                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK, client_id)
                 continue
 
             if msg_type == message_protocol.external.MsgType.END_ACCOUNTS:
-                logging.info(f"Received end accounts message from client {client_id}")
                 msg_client_id = payload
                 if client_id is None:
                     client_id = msg_client_id
                     client_sockets[client_id] = client_socket
-                    client_ready[client_id] = False
+                    
+                    client_ready_events[client_id] = threading.Event()
+                    client_outboxes[client_id] = queue.Queue()
+                    
+                    t_disp = threading.Thread(
+                        target=client_dispatcher,
+                        args=(client_id, client_socket, client_outboxes[client_id], client_ready_events[client_id])
+                    )
+                    t_disp.daemon = True
+                    t_disp.start()
                 elif msg_client_id != client_id:
                     raise ValueError("Client id mismatch in end accounts")
-                message_protocol.external.send_msg(
-                    client_socket,
-                    message_protocol.external.MsgType.ACK,
-                    client_id,
-                )
+                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK, client_id)
                 continue
 
             if msg_type == message_protocol.external.MsgType.TRANSACTIONS_BATCH:
                 if output is None:
                     output = _build_output_queue(mom_host, output_queue, output_exchange)
-                logging.debug(f"Received transactions batch from client {client_id}")
-                transactions = _rows_to_transactions(
-                    client_id, rows, transaction_columns
-                )
+                transactions = _rows_to_transactions(client_id, rows, transaction_columns)
                 for transactions_chunk in _chunks(transactions, gateway_output_batch_size):
-                    serialized_message = handler.serialize_rows_message(
-                        client_id, transactions_chunk
-                    )
-
+                    serialized_message = handler.serialize_rows_message(client_id, transactions_chunk)
                     if isinstance(output, ShardedExchangeProducer):
                         shard = random.randint(0, output_shards - 1)
                         output.send_to_shard(serialized_message, shard)
                     else:
                         output.send(serialized_message)
 
-                message_protocol.external.send_msg(
-                    client_socket,
-                    message_protocol.external.MsgType.ACK,
-                    client_id,
-                )
+                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK, client_id)
                 continue
 
             if msg_type == message_protocol.external.MsgType.END_TRANSACTIONS:
                 if output is None:
                     output = _build_output_queue(mom_host, output_queue, output_exchange)
-                logging.info(f"Received end transactions message from client {client_id}")
                 msg_client_id = payload
                 if client_id is None:
                     client_id = msg_client_id
                     client_sockets[client_id] = client_socket
-                    client_ready[client_id] = False
-                elif msg_client_id != client_id:
-                    raise ValueError("Client id mismatch in end transactions")
+                    client_ready_events[client_id] = threading.Event()
+                    client_outboxes[client_id] = queue.Queue()
+                    t_disp = threading.Thread(
+                        target=client_dispatcher,
+                        args=(client_id, client_socket, client_outboxes[client_id], client_ready_events[client_id])
+                    )
+                    t_disp.daemon = True
+                    t_disp.start()
+
                 serialized_message = handler.serialize_eof_message(client_id)
                 if isinstance(output, ShardedExchangeProducer):
                     output.send_eof_to_all(serialized_message)
                 else:
                     output.send(serialized_message)
-                message_protocol.external.send_msg(
-                    client_socket,
-                    message_protocol.external.MsgType.ACK,
-                    client_id,
-                )
-                # Avisamos al hilo de resultados que este cliente ya terminó de mandar todo
-                client_ready[client_id] = True
-                return # RETORNO EXITOSO: NO CERRAMOS EL SOCKET, queda vivo para result_handlers
+
+                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK, client_id)
+
+                client_ready_events[client_id].set()
+                return 
 
             raise TypeError(f"Unexpected message type: {msg_type}")
     except Exception as e:
         logging.error(f"Handler error for client {client_id}: {e}")
         logging.error(traceback.format_exc())
-        client_socket.close() # Si algo falló catastróficamente en la recepción, sí cerramos el socket
+        client_socket.close() 
     finally:
         if output is not None:
             output.close()
