@@ -22,7 +22,7 @@ class BarrierFilter(WorkerBaseDoubleIO):
         manager = multiprocessing.Manager()
         self._comparison_values_by_client = manager.dict()
         self._thresholds_ready_by_client = manager.dict()
-        self._spool_lock = manager.RLock()
+        self._spool_lock = multiprocessing.Lock()
 
         # Local elements
         self._local_thresholds_ready = set()

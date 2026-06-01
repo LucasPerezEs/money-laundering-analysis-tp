@@ -24,7 +24,7 @@ import os
 import random
 import signal
 import time
-import hashlib
+import zlib
 
 from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ, _connection_parameters
 from common.middleware.middleware_sharded import ShardedExchangeConsumer, ShardedExchangeProducer
@@ -130,7 +130,7 @@ class WorkerBase:
             routing_field = os.environ.get("ROUTING_FIELD")
             if routing_field and routing_field in msg:
                 val = str(msg[routing_field]).encode()
-                return str(int(hashlib.md5(val).hexdigest(), 16) % self.output_shards)
+                return str(zlib.crc32(val) % self.output_shards)
             else:
                 return str(random.randint(0, self.output_shards - 1))
         return "__queue__"
