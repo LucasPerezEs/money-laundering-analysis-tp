@@ -17,10 +17,12 @@ La etapa siguiente (`PathsCreator`) recibe ambas vistas para una misma cuenta
 intermediaria y materializa caminos de dos saltos:
 origen -> intermediaria -> destino.
 """
+import dbm
 import logging
-import hashlib
+import os
+import pickle
+import zlib
 
-from common import transaction_id
 from common.middleware.worker_base import WorkerBase
 
 # Constants
@@ -36,89 +38,95 @@ MIN_DISTINCT_DESTINATIONS = 5
 
 
 class TransactionsGraphAgg(WorkerBase):
-    """Filtra transacciones Q4 por origen activo y emite aristas de entrada/salida."""
 
     def __init__(self):
         super().__init__()
-        self.transactions_by_client_id = {}
-        self.destinations_by_source_by_client_id = {}
+        self.db_path = f"/tmp/worker_edges_{self.shard_id}"
+        self.edges_db = dbm.open(self.db_path, 'c')
 
     def process(self, data):
-        client_id = data["client_id"]
+        client_id = str(data["client_id"])
+        o_bank = str(data[TRANSACTION_ORIGIN_BANK_KEY])
+        o_acc = str(data[TRANSACTION_ORIGIN_ACC_KEY])
+        d_bank = str(data[TRANSACTION_DESTINATION_BANK_KEY])
+        d_acc = str(data[TRANSACTION_DESTINATION_ACC_KEY])
 
-        origin = transaction_id.TransactionID(
-            data[TRANSACTION_ORIGIN_BANK_KEY],
-            data[TRANSACTION_ORIGIN_ACC_KEY],
-        )
-        destination = transaction_id.TransactionID(
-            data[TRANSACTION_DESTINATION_BANK_KEY],
-            data[TRANSACTION_DESTINATION_ACC_KEY],
-        )
+        origin_key_str = f"{client_id}||{o_bank}||{o_acc}"
+        origin_key_bytes = origin_key_str.encode('utf-8')
+        destination = (d_bank, d_acc)
 
-        self.transactions_by_client_id.setdefault(client_id, []).append(data)
-        destinations_by_source = self.destinations_by_source_by_client_id.setdefault(
-            client_id, {}
-        )
-        destinations_by_source.setdefault(origin, set()).add(destination)
+        try:
+            destinations = pickle.loads(self.edges_db[origin_key_bytes])
+            is_new_origin = False
+        except KeyError:
+            destinations = set()
+            is_new_origin = True
+
+        len_before = len(destinations)
+        destinations.add(destination)
+
+        if is_new_origin:
+            log_path = f"/tmp/origins_shard_{self.shard_id}_client_{client_id}.log"
+            with open(log_path, 'a') as f:
+                f.write(f"{origin_key_str}\n")
+
+        if len(destinations) > len_before:
+            self.edges_db[origin_key_bytes] = pickle.dumps(destinations)
 
         return []
 
     def on_eof(self, client_id=None):
-        logging.info(f"EOF received for client_id={client_id}")
-        transactions = self.transactions_by_client_id.pop(client_id, [])
-        destinations_by_source = self.destinations_by_source_by_client_id.pop(
-            client_id, {}
-        )
+        client_id_str = str(client_id)
+        logging.info(f"EOF recibido para client_id={client_id_str}")
+        
+        log_path = f"/tmp/origins_shard_{self.shard_id}_client_{client_id_str}.log"
+        
+        if not os.path.exists(log_path):
+            logging.info("No se encontraron transacciones para este cliente.")
+            return
 
-        for data in transactions:
-            origin = transaction_id.TransactionID(
-                data[TRANSACTION_ORIGIN_BANK_KEY],
-                data[TRANSACTION_ORIGIN_ACC_KEY],
-            )
-            if (
-                len(destinations_by_source.get(origin, set()))
-                <= MIN_DISTINCT_DESTINATIONS
-            ):
-                continue
+        with open(log_path, 'r') as f:
+            for line in f:
+                origin_key_str = line.strip()
+                origin_key_bytes = origin_key_str.encode('utf-8')
 
-            yield {
-                "client_id": client_id,
-                TRANSACTION_ORIGIN_BANK_KEY: data[TRANSACTION_ORIGIN_BANK_KEY],
-                TRANSACTION_ORIGIN_ACC_KEY: data[TRANSACTION_ORIGIN_ACC_KEY],
-                TRANSACTION_DESTINATION_BANK_KEY: data[
-                    TRANSACTION_DESTINATION_BANK_KEY
-                ],
-                TRANSACTION_DESTINATION_ACC_KEY: data[
-                    TRANSACTION_DESTINATION_ACC_KEY
-                ],
-                NEW_DATA_EDGE_TAG_KEY: EDGES_INPUT_TAG,
-            }
+                if origin_key_bytes not in self.edges_db:
+                    continue
+                    
+                destinations = pickle.loads(self.edges_db[origin_key_bytes])
+                
+                # Filtro de lógica de negocio
+                if len(destinations) > MIN_DISTINCT_DESTINATIONS:
+                    parts = origin_key_str.split('||')
+                    o_bank = parts[1]
+                    o_acc = parts[2]
+                    
+                    for d_bank, d_acc in destinations:
+                        yield {
+                            "client_id": client_id_str,
+                            TRANSACTION_ORIGIN_BANK_KEY: o_bank,
+                            TRANSACTION_ORIGIN_ACC_KEY: o_acc,
+                            TRANSACTION_DESTINATION_BANK_KEY: d_bank,
+                            TRANSACTION_DESTINATION_ACC_KEY: d_acc,
+                            NEW_DATA_EDGE_TAG_KEY: EDGES_INPUT_TAG,
+                        }
+                        yield {
+                            "client_id": client_id_str,
+                            TRANSACTION_ORIGIN_BANK_KEY: o_bank,
+                            TRANSACTION_ORIGIN_ACC_KEY: o_acc,
+                            TRANSACTION_DESTINATION_BANK_KEY: d_bank,
+                            TRANSACTION_DESTINATION_ACC_KEY: d_acc,
+                            NEW_DATA_EDGE_TAG_KEY: EDGES_OUTPUT_TAG,
+                        }
+                del self.edges_db[origin_key_bytes]
 
-            yield {
-                "client_id": client_id,
-                TRANSACTION_ORIGIN_BANK_KEY: data[TRANSACTION_ORIGIN_BANK_KEY],
-                TRANSACTION_ORIGIN_ACC_KEY: data[TRANSACTION_ORIGIN_ACC_KEY],
-                TRANSACTION_DESTINATION_BANK_KEY: data[
-                    TRANSACTION_DESTINATION_BANK_KEY
-                ],
-                TRANSACTION_DESTINATION_ACC_KEY: data[
-                    TRANSACTION_DESTINATION_ACC_KEY
-                ],
-                NEW_DATA_EDGE_TAG_KEY: EDGES_OUTPUT_TAG,
-            }
-
-        logging.info("EOF procesado: aristas enviadas")
+        os.remove(log_path)
+        logging.info("EOF procesado: archivo log temporal eliminado.")
 
     def _routing_key(self, msg: dict) -> str:
-        """Shard numerico para que ambas vistas de un nodo lleguen al mismo worker."""
         if msg[NEW_DATA_EDGE_TAG_KEY] == EDGES_INPUT_TAG:
-            key = (
-                f"{msg[TRANSACTION_DESTINATION_BANK_KEY]}"
-                f"{msg[TRANSACTION_DESTINATION_ACC_KEY]}"
-            )
+            key = f"{msg[TRANSACTION_DESTINATION_BANK_KEY]}{msg[TRANSACTION_DESTINATION_ACC_KEY]}"
         else:
-            key = (
-                f"{msg[TRANSACTION_ORIGIN_BANK_KEY]}"
-                f"{msg[TRANSACTION_ORIGIN_ACC_KEY]}"
-            )
-        return str(int(hashlib.md5(key.encode()).hexdigest(), 16) % self.output_shards)
+            key = f"{msg[TRANSACTION_ORIGIN_BANK_KEY]}{msg[TRANSACTION_ORIGIN_ACC_KEY]}"
+
+        return str(zlib.crc32(key) % self.output_shards)
