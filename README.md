@@ -69,6 +69,40 @@ Opcionalmente, podes fijar una semilla para resultados reproducibles:
 python scripts/reduce_dataset.py --input datasets/transactions_full.csv --output datasets/transactions_reduced.csv --size 100000 --seed 123
 ```
 
+## Chaos monkey
+
+El script [scripts/chaos_monkey.py](scripts/chaos_monkey.py) permite interrumpir servicios de `docker compose` para probar tolerancia a fallos. La configuracion vive en [scripts/chaos_monkey.yaml](scripts/chaos_monkey.yaml).
+
+Primero conviene validar que la configuracion selecciona los servicios esperados:
+
+```bash
+python scripts/chaos_monkey.py --dry-run --once
+```
+
+Para ejecutarlo continuamente mientras el sistema esta levantado:
+
+```bash
+python scripts/chaos_monkey.py
+```
+
+Tambien se puede limitar a un solo evento real:
+
+```bash
+python scripts/chaos_monkey.py --once
+```
+
+La configuracion permite definir:
+
+- `allowed_services`: servicios exactos que pueden ser detenidos.
+- `allowed_patterns`: patrones regex de servicios permitidos.
+- `exclude_services` y `exclude_patterns`: servicios que nunca se deben tocar.
+- `action`: `restart`, `stop`, `stop_start` o `kill_start`.
+- `interval_seconds`: rango de espera entre fallos.
+- `downtime_seconds`: rango de tiempo que un servicio queda detenido.
+- `max_events`: cantidad maxima de eventos antes de terminar.
+
+Por defecto no se interrumpen `rabbitmq`, `gateway`, `client_*` ni el cliente de API de Q5.
+
 ## Resultados
 
 Los resultados de cada cliente se escriben como CSV en:

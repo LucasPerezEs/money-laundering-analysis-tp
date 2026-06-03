@@ -1,0 +1,46 @@
+enabled: true
+compose_file: docker-compose.yaml
+
+# Acciones disponibles:
+# - restart: docker compose restart <servicio>
+# - stop: docker compose stop <servicio>
+# - stop_start: docker compose stop <servicio>, espera downtime_seconds, docker compose start <servicio>
+# - kill_start: docker compose kill -s SIGKILL <servicio>, espera downtime_seconds, docker compose start <servicio>
+action: stop_start
+
+initial_delay_seconds: 20
+interval_seconds: [30, 90]
+downtime_seconds: [5, 20]
+max_events: 1
+
+# Allowlist exacta. Usala para pruebas quirurgicas sobre servicios puntuales.
+allowed_services: []
+
+# Allowlist por regex. Solo estos servicios pueden ser interrumpidos.
+allowed_patterns:
+  - "^usd_filter_"
+  - "^q[1-5]_filter_"
+  - "^q[1-5]_data_reducer_"
+  - "^q[1-5]_splitter"
+  - "^q[1-5]_aggregator"
+  - "^q3_avg_aggregators_"
+  - "^q3_avg_and_transactions_joiner_"
+  - "^q5_counter_"
+  - "^q5_money_converter_"
+  - "^q5_transaction_counter_"
+  - "^q4_transaction_graph_"
+  - "^q4_paths_creators_"
+  - "^q4_paths_splitters_"
+  - "^q4_unique_paths_counters_"
+
+# Servicios criticos que no queremos detener por defecto.
+exclude_services:
+  - rabbitmq
+  - gateway
+
+exclude_patterns:
+  - "^client_"
+  - "^q5_money_converter_api_client_"
+
+# Pesos opcionales por servicio. Mayor peso => mas probabilidad de ser elegido.
+weights: {}
