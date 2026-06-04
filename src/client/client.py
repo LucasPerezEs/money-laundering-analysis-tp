@@ -65,7 +65,7 @@ class Client:
                 return
 
             except socket.error as e:
-                logging.warning(f"Gateway not ready, retrying... ({e})")
+                logging.info(f"Gateway not ready, retrying... ({e})")
                 self.server_socket.close()
                 attempts += 1
                 if attempts >= 10:
@@ -167,7 +167,7 @@ class Client:
 
         for row in csv_reader:
             if len(row) < len(headers):
-                logging.warning("Transaction row has unexpected length %s", len(row))
+                logging.info("Transaction row has unexpected length %s", len(row))
                 continue
             yield [row[index] for index in column_indexes]
 

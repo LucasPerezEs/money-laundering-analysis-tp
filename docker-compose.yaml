@@ -13,8 +13,8 @@ services:
     - SERVER_HOST=gateway
     - SERVER_PORT=7659
     - BATCH_SIZE=5000
-    - TRANSACTIONS_FILE=/datasets/LI-Medium_Trans.csv
-    - ACCOUNTS_FILE=/datasets/LI-Medium_accounts.csv
+    - TRANSACTIONS_FILE=/datasets/LI-Small_Trans.csv
+    - ACCOUNTS_FILE=/datasets/LI-Small_accounts.csv
     - CLIENT_ID=0
     - RESULTS_DIR=/results
     - BATCH_SIZE=20000
@@ -720,7 +720,7 @@ services:
     - INPUT_EXCHANGE=q4_reduced_data_exc
     - CONSUMER_GROUP=q4_filter_01092022_05092022_prefix
     - SHARD_ID=0
-    - OUTPUT_EXCHANGE=q4_splitter_exc
+    - OUTPUT_EXCHANGE=q4_splitters_exc
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
@@ -740,7 +740,7 @@ services:
     - INPUT_EXCHANGE=q4_reduced_data_exc
     - CONSUMER_GROUP=q4_filter_01092022_05092022_prefix
     - SHARD_ID=1
-    - OUTPUT_EXCHANGE=q4_splitter_exc
+    - OUTPUT_EXCHANGE=q4_splitters_exc
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
@@ -760,312 +760,398 @@ services:
     - INPUT_EXCHANGE=q4_reduced_data_exc
     - CONSUMER_GROUP=q4_filter_01092022_05092022_prefix
     - SHARD_ID=2
-    - OUTPUT_EXCHANGE=q4_splitter_exc
+    - OUTPUT_EXCHANGE=q4_splitters_exc
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
-  q4_paths_creators_0:
+  q4_inc_edges_filter_0:
     build:
-      context: ./src/
-      dockerfile: paths_creator/Dockerfile
-    container_name: q4_paths_creators_0
+      context: ./src
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_inc_edges_filter_0
     depends_on:
       rabbitmq:
         condition: service_healthy
+    entrypoint:
+    - python3
+    - incoming_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=4
-    - INPUT_EXCHANGE=q4_edges_exc
-    - CONSUMER_GROUP=q4_paths_creators
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - CONSUMER_GROUP=q4_inc_edges_filter
     - SHARD_ID=0
-    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
-  q4_paths_creators_1:
+  q4_inc_edges_filter_1:
     build:
-      context: ./src/
-      dockerfile: paths_creator/Dockerfile
-    container_name: q4_paths_creators_1
+      context: ./src
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_inc_edges_filter_1
     depends_on:
       rabbitmq:
         condition: service_healthy
+    entrypoint:
+    - python3
+    - incoming_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=4
-    - INPUT_EXCHANGE=q4_edges_exc
-    - CONSUMER_GROUP=q4_paths_creators
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - CONSUMER_GROUP=q4_inc_edges_filter
     - SHARD_ID=1
-    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
-  q4_paths_creators_2:
+  q4_inc_edges_filter_2:
     build:
-      context: ./src/
-      dockerfile: paths_creator/Dockerfile
-    container_name: q4_paths_creators_2
+      context: ./src
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_inc_edges_filter_2
     depends_on:
       rabbitmq:
         condition: service_healthy
+    entrypoint:
+    - python3
+    - incoming_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=4
-    - INPUT_EXCHANGE=q4_edges_exc
-    - CONSUMER_GROUP=q4_paths_creators
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - CONSUMER_GROUP=q4_inc_edges_filter
     - SHARD_ID=2
-    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
-  q4_paths_creators_3:
+  q4_inc_edges_filter_3:
     build:
-      context: ./src/
-      dockerfile: paths_creator/Dockerfile
-    container_name: q4_paths_creators_3
+      context: ./src
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_inc_edges_filter_3
     depends_on:
       rabbitmq:
         condition: service_healthy
+    entrypoint:
+    - python3
+    - incoming_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=4
-    - INPUT_EXCHANGE=q4_edges_exc
-    - CONSUMER_GROUP=q4_paths_creators
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - CONSUMER_GROUP=q4_inc_edges_filter
     - SHARD_ID=3
-    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
-  q4_paths_splitters_by_ends_0:
+  q4_out_edges_filter_0:
     build:
       context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_paths_splitters_by_ends_0
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_out_edges_filter_0
     depends_on:
       rabbitmq:
         condition: service_healthy
     entrypoint:
     - python3
-    - /app/splitter.py
+    - outgoing_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_paths_exc
-    - CONSUMER_GROUP=q4_paths_splitters_by_ends
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_out_edges_filter_exc
+    - CONSUMER_GROUP=q4_out_edges_filter
     - SHARD_ID=0
-    - OUTPUT_EXCHANGE=q4_unique_paths_counter_exc
-    - N_UPSTREAM=4
-    - OUTPUT_SHARDS=1
-    - SHARD_KEY_FIELDS=From Bank,Account,To Bank,Account.1
-  q4_paths_splitters_by_ends_1:
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
+    - OUTPUT_SHARDS=4
+  q4_out_edges_filter_1:
     build:
       context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_paths_splitters_by_ends_1
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_out_edges_filter_1
     depends_on:
       rabbitmq:
         condition: service_healthy
     entrypoint:
     - python3
-    - /app/splitter.py
+    - outgoing_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_paths_exc
-    - CONSUMER_GROUP=q4_paths_splitters_by_ends
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_out_edges_filter_exc
+    - CONSUMER_GROUP=q4_out_edges_filter
     - SHARD_ID=1
-    - OUTPUT_EXCHANGE=q4_unique_paths_counter_exc
-    - N_UPSTREAM=4
-    - OUTPUT_SHARDS=1
-    - SHARD_KEY_FIELDS=From Bank,Account,To Bank,Account.1
-  q4_paths_splitters_by_ends_2:
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
+    - OUTPUT_SHARDS=4
+  q4_out_edges_filter_2:
     build:
       context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_paths_splitters_by_ends_2
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_out_edges_filter_2
     depends_on:
       rabbitmq:
         condition: service_healthy
     entrypoint:
     - python3
-    - /app/splitter.py
+    - outgoing_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_paths_exc
-    - CONSUMER_GROUP=q4_paths_splitters_by_ends
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_out_edges_filter_exc
+    - CONSUMER_GROUP=q4_out_edges_filter
     - SHARD_ID=2
-    - OUTPUT_EXCHANGE=q4_unique_paths_counter_exc
-    - N_UPSTREAM=4
-    - OUTPUT_SHARDS=1
-    - SHARD_KEY_FIELDS=From Bank,Account,To Bank,Account.1
-  q4_paths_splitters_by_ends_3:
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
+    - OUTPUT_SHARDS=4
+  q4_out_edges_filter_3:
     build:
       context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_paths_splitters_by_ends_3
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_out_edges_filter_3
     depends_on:
       rabbitmq:
         condition: service_healthy
     entrypoint:
     - python3
-    - /app/splitter.py
+    - outgoing_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_paths_exc
-    - CONSUMER_GROUP=q4_paths_splitters_by_ends
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_out_edges_filter_exc
+    - CONSUMER_GROUP=q4_out_edges_filter
     - SHARD_ID=3
-    - OUTPUT_EXCHANGE=q4_unique_paths_counter_exc
-    - N_UPSTREAM=4
-    - OUTPUT_SHARDS=1
-    - SHARD_KEY_FIELDS=From Bank,Account,To Bank,Account.1
-  q4_splitters_by_origin_and_dest_prefix_0:
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
+    - OUTPUT_SHARDS=4
+  q4_paths_aggregator_0:
     build:
       context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_splitters_by_origin_and_dest_prefix_0
+      dockerfile: graph_paths/Dockerfile
+    container_name: q4_paths_aggregator_0
     depends_on:
       rabbitmq:
         condition: service_healthy
     entrypoint:
     - python3
-    - /app/splitter.py
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_splitter_exc
-    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_prefix
-    - SHARD_ID=0
-    - OUTPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - N_UPSTREAM=3
-    - OUTPUT_SHARDS=4
-    - SHARD_KEY_FIELDS=From Bank,Account
-  q4_splitters_by_origin_and_dest_prefix_1:
-    build:
-      context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_splitters_by_origin_and_dest_prefix_1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    entrypoint:
-    - python3
-    - /app/splitter.py
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_splitter_exc
-    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_prefix
-    - SHARD_ID=1
-    - OUTPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - N_UPSTREAM=3
-    - OUTPUT_SHARDS=4
-    - SHARD_KEY_FIELDS=From Bank,Account
-  q4_splitters_by_origin_and_dest_prefix_2:
-    build:
-      context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_splitters_by_origin_and_dest_prefix_2
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    entrypoint:
-    - python3
-    - /app/splitter.py
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_splitter_exc
-    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_prefix
-    - SHARD_ID=2
-    - OUTPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - N_UPSTREAM=3
-    - OUTPUT_SHARDS=4
-    - SHARD_KEY_FIELDS=From Bank,Account
-  q4_transaction_graph_0:
-    build:
-      context: ./src/
-      dockerfile: transactions_graph/Dockerfile
-    container_name: q4_transaction_graph_0
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=3
-    - INPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - CONSUMER_GROUP=q4_transaction_graph
-    - SHARD_ID=0
-    - OUTPUT_EXCHANGE=q4_edges_exc
-    - OUTPUT_SHARDS=4
-  q4_transaction_graph_1:
-    build:
-      context: ./src/
-      dockerfile: transactions_graph/Dockerfile
-    container_name: q4_transaction_graph_1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=3
-    - INPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - CONSUMER_GROUP=q4_transaction_graph
-    - SHARD_ID=1
-    - OUTPUT_EXCHANGE=q4_edges_exc
-    - OUTPUT_SHARDS=4
-  q4_transaction_graph_2:
-    build:
-      context: ./src/
-      dockerfile: transactions_graph/Dockerfile
-    container_name: q4_transaction_graph_2
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=3
-    - INPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - CONSUMER_GROUP=q4_transaction_graph
-    - SHARD_ID=2
-    - OUTPUT_EXCHANGE=q4_edges_exc
-    - OUTPUT_SHARDS=4
-  q4_transaction_graph_3:
-    build:
-      context: ./src/
-      dockerfile: transactions_graph/Dockerfile
-    container_name: q4_transaction_graph_3
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=3
-    - INPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - CONSUMER_GROUP=q4_transaction_graph
-    - SHARD_ID=3
-    - OUTPUT_EXCHANGE=q4_edges_exc
-    - OUTPUT_SHARDS=4
-  q4_unique_paths_counters_0:
-    build:
-      context: ./src
-      dockerfile: unique_paths_counter/Dockerfile
-    container_name: q4_unique_paths_counters_0
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
+    - paths_aggregator.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
     - N_UPSTREAM=4
-    - INPUT_EXCHANGE=q4_unique_paths_counter_exc
-    - CONSUMER_GROUP=q4_unique_paths_counters
+    - INPUT_EXCHANGE=q4_paths_exc
+    - CONSUMER_GROUP=q4_paths_aggregator
     - SHARD_ID=0
     - OUTPUT_QUEUE=results_4
     - TOTAL_CLIENTS=1
     - BATCH_SIZE=1000
+  q4_paths_creators_0:
+    build:
+      context: ./src
+      dockerfile: graph_paths/Dockerfile
+    container_name: q4_paths_creators_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - paths_creator.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - N_UPSTREAM=8
+    - INPUT_EXCHANGE=q4_candidates_edges_exc
+    - CONSUMER_GROUP=q4_paths_creators
+    - SHARD_ID=0
+    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_SHARDS=1
+  q4_paths_creators_1:
+    build:
+      context: ./src
+      dockerfile: graph_paths/Dockerfile
+    container_name: q4_paths_creators_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - paths_creator.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - N_UPSTREAM=8
+    - INPUT_EXCHANGE=q4_candidates_edges_exc
+    - CONSUMER_GROUP=q4_paths_creators
+    - SHARD_ID=1
+    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_SHARDS=1
+  q4_paths_creators_2:
+    build:
+      context: ./src
+      dockerfile: graph_paths/Dockerfile
+    container_name: q4_paths_creators_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - paths_creator.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - N_UPSTREAM=8
+    - INPUT_EXCHANGE=q4_candidates_edges_exc
+    - CONSUMER_GROUP=q4_paths_creators
+    - SHARD_ID=2
+    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_SHARDS=1
+  q4_paths_creators_3:
+    build:
+      context: ./src
+      dockerfile: graph_paths/Dockerfile
+    container_name: q4_paths_creators_3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - paths_creator.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - N_UPSTREAM=8
+    - INPUT_EXCHANGE=q4_candidates_edges_exc
+    - CONSUMER_GROUP=q4_paths_creators
+    - SHARD_ID=3
+    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_SHARDS=1
+  q4_splitters_by_origin_and_dest_inc_0:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q4_splitters_by_origin_and_dest_inc_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - /app/splitter.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_EXCHANGE=q4_splitters_exc
+    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_inc
+    - SHARD_ID=0
+    - OUTPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - N_UPSTREAM=3
+    - OUTPUT_SHARDS=4
+    - SHARD_KEY_FIELDS=To Bank,Account.1
+  q4_splitters_by_origin_and_dest_inc_1:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q4_splitters_by_origin_and_dest_inc_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - /app/splitter.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_EXCHANGE=q4_splitters_exc
+    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_inc
+    - SHARD_ID=1
+    - OUTPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - N_UPSTREAM=3
+    - OUTPUT_SHARDS=4
+    - SHARD_KEY_FIELDS=To Bank,Account.1
+  q4_splitters_by_origin_and_dest_inc_2:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q4_splitters_by_origin_and_dest_inc_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - /app/splitter.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_EXCHANGE=q4_splitters_exc
+    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_inc
+    - SHARD_ID=2
+    - OUTPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - N_UPSTREAM=3
+    - OUTPUT_SHARDS=4
+    - SHARD_KEY_FIELDS=To Bank,Account.1
+  q4_splitters_by_origin_and_dest_out_0:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q4_splitters_by_origin_and_dest_out_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - /app/splitter.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_EXCHANGE=q4_splitters_exc
+    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_out
+    - SHARD_ID=0
+    - OUTPUT_EXCHANGE=q4_out_edges_filter_exc
+    - N_UPSTREAM=3
+    - OUTPUT_SHARDS=4
+    - SHARD_KEY_FIELDS=From Bank,Account
+  q4_splitters_by_origin_and_dest_out_1:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q4_splitters_by_origin_and_dest_out_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - /app/splitter.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_EXCHANGE=q4_splitters_exc
+    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_out
+    - SHARD_ID=1
+    - OUTPUT_EXCHANGE=q4_out_edges_filter_exc
+    - N_UPSTREAM=3
+    - OUTPUT_SHARDS=4
+    - SHARD_KEY_FIELDS=From Bank,Account
+  q4_splitters_by_origin_and_dest_out_2:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q4_splitters_by_origin_and_dest_out_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - /app/splitter.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_EXCHANGE=q4_splitters_exc
+    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_out
+    - SHARD_ID=2
+    - OUTPUT_EXCHANGE=q4_out_edges_filter_exc
+    - N_UPSTREAM=3
+    - OUTPUT_SHARDS=4
+    - SHARD_KEY_FIELDS=From Bank,Account
   q5_counter_0:
     build:
       context: ./src

@@ -56,7 +56,7 @@ def _wait_for_rabbitmq():
             conn.close()
             return
         except Exception:
-            logger.warning(f"RabbitMQ no disponible, reintentando en {RECONNECT_DELAY}s...")
+            logger.info(f"RabbitMQ no disponible, reintentando en {RECONNECT_DELAY}s...")
             time.sleep(RECONNECT_DELAY)
 
 
@@ -86,7 +86,7 @@ class WorkerBaseDoubleIO:
 
     def _reconnect_backoff(self, attempt: int):
         delay = min(RECONNECT_DELAY * (2 ** attempt), RECONNECT_MAX_DELAY)
-        logger.warning(f"Reintentando conexion en {delay}s...")
+        logger.info(f"Reintentando conexion en {delay}s...")
         time.sleep(delay)
 
     def _handle_main_process_sigterm(self, *_):

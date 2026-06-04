@@ -1,12 +1,12 @@
 build:
   context: ./src
-  dockerfile: graph_paths/Dockerfile
+  dockerfile: graph_edges_filter/Dockerfile
 depends_on:
   rabbitmq:
     condition: service_healthy
 entrypoint:
 - python3
-- paths_creator.py
+- incoming_edges_filter.py
 environment:
 - MOM_HOST=rabbitmq
 - PYTHONUNBUFFERED=1
