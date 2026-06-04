@@ -3,14 +3,16 @@ import yaml
 import copy
 
 # Configs files
-SUB_GRAPH_CONFIG_FILE = "sub_graph_agg_config.yaml"
+INC_EDGES_FILTER_CONFIG_FILE = "inc_edges_filter_config.yaml"
+OUT_EDGES_FILTER_CONFIG_FILE = "out_edges_filter_config.yaml"
 PATHS_CREATOR_CONFIG_FILE = "paths_creator_config.yaml"
-UNIQUE_PATHS_COUNTER_CONFIG_FILE = "unique_paths_counter_config.yaml"
+PATHS_AGG_CONFIG_FILE = "paths_agg_config.yaml"
 
 CONFIGS_FILES = {
-    "sub_graph_agg" : SUB_GRAPH_CONFIG_FILE,
+    "inc_edges_filter" : INC_EDGES_FILTER_CONFIG_FILE,
+    "out_edges_filter" : OUT_EDGES_FILTER_CONFIG_FILE,
     "paths_creator" : PATHS_CREATOR_CONFIG_FILE,
-    "unique_paths_count" : UNIQUE_PATHS_COUNTER_CONFIG_FILE
+    "unique_paths_count" : PATHS_AGG_CONFIG_FILE
 }
 
 BASE_DIR = os.path.dirname(__file__)

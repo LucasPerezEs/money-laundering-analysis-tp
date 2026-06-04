@@ -45,7 +45,7 @@ def _wait_for_rabbitmq():
             conn.close()
             return
         except Exception:
-            logger.warning(f"RabbitMQ no disponible, reintentando en {RECONNECT_DELAY}s...")
+            logger.info(f"RabbitMQ no disponible, reintentando en {RECONNECT_DELAY}s...")
             time.sleep(RECONNECT_DELAY)
 
 
@@ -105,7 +105,7 @@ class WorkerBase:
 
     def _reconnect_backoff(self, attempt: int):
         delay = min(RECONNECT_DELAY * (2 ** attempt), RECONNECT_MAX_DELAY)
-        logger.warning(f"Reintentando conexion en {delay}s...")
+        logger.info(f"Reintentando conexion en {delay}s...")
         time.sleep(delay)
 
     def _handle_sigterm(self, *_):
@@ -296,7 +296,7 @@ class WorkerBase:
             try:
                 self._consumer.start_consuming(on_message)
                 if self._running:
-                    logger.warning("El consumo finalizo inesperadamente; reconectando")
+                    logger.info("El consumo finalizo inesperadamente; reconectando")
                     self._close_resources()
                     _wait_for_rabbitmq()
                     self._reconnect_backoff(attempt)

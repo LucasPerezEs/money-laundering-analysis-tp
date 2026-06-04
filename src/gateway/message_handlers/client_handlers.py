@@ -33,7 +33,7 @@ def _update_bank_map(bank_maps, client_id, rows):
 def _rows_to_transactions(client_id, rows, transaction_columns):
     for row in rows:
         if len(row) != len(transaction_columns):
-            logging.warning("Transaction row has unexpected length %s", len(row))
+            logging.info("Transaction row has unexpected length %s", len(row))
             continue
         transaction = dict(zip(transaction_columns, row))
         transaction["client_id"] = client_id

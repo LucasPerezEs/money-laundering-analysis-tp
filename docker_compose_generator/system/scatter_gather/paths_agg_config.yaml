@@ -1,9 +1,12 @@
 build:
-  context: ./src/
-  dockerfile: transactions_graph/Dockerfile
+  context: ./src
+  dockerfile: graph_paths/Dockerfile
 depends_on:
   rabbitmq:
     condition: service_healthy
+entrypoint:
+- python3
+- paths_aggregator.py
 environment:
 - MOM_HOST=rabbitmq
 - PYTHONUNBUFFERED=1

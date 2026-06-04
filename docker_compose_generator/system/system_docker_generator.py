@@ -55,12 +55,12 @@ def generate_system_docker_compose(total_clients=0):
 
         q4_data_reducer_prefix, q4_data_reducer_instances = _get_next_config_row(config_file_reader)
         q4_filter_01092022_05092022_prefix, q4_filter_01092022_05092022_instances = _get_next_config_row(config_file_reader)
-        q4_splitters_by_origin_and_dest_prefix, q4_splitters_by_origin_and_dest_instances = _get_next_config_row(config_file_reader)
-        q4_transaction_graph_prefix, q4_transaction_graph_instances = _get_next_config_row(config_file_reader)
-        q4_graphs_edges_splitters_prefix, q4_graphs_edges_splitters_instances = _get_next_config_row(config_file_reader)
+        q4_splitters_by_origin_and_dest_inc_prefix, q4_splitters_by_origin_and_dest_instances = _get_next_config_row(config_file_reader)
+        q4_inc_edges_filter_prefix, q4_edges_filter_instances = _get_next_config_row(config_file_reader)
+        q4_splitters_by_origin_and_dest_out_prefix, q4_splitters_by_origin_and_dest_instances = _get_next_config_row(config_file_reader)
+        q4_out_edges_filter_prefix, q4_edges_filter_instances = _get_next_config_row(config_file_reader)
         q4_paths_creators_prefix, q4_paths_creators_instances = _get_next_config_row(config_file_reader)
-        q4_paths_splitters_by_ends_prefix, q4_paths_splitters_by_ends_instances = _get_next_config_row(config_file_reader)
-        q4_unique_paths_counters_prefix, q4_unique_paths_counters_instances = _get_next_config_row(config_file_reader)
+        q4_paths_aggregator_prefix, q4_paths_aggregator_instances = _get_next_config_row(config_file_reader)
 
         q5_data_reducer_prefix, q5_data_reducer_instances = _get_next_config_row(config_file_reader)
         q5_filter_01092022_05092022_prefix, q5_filter_01092022_05092022_instances = _get_next_config_row(config_file_reader)
@@ -75,7 +75,7 @@ def generate_system_docker_compose(total_clients=0):
         gateway["gateway"]["environment"].append(f"QUERY_1_N_UPSTREAM={filter_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_2_N_UPSTREAM={q2_aggregator_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_3_N_UPSTREAM={q3_avg_and_transactions_joiner_instances}")
-        gateway["gateway"]["environment"].append(f"QUERY_4_N_UPSTREAM={q4_unique_paths_counters_instances}")
+        gateway["gateway"]["environment"].append(f"QUERY_4_N_UPSTREAM={q4_paths_aggregator_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_5_N_UPSTREAM={q5_totals_sumer_instances}")
         gateway["gateway"]["environment"].append(
             "TRANSACTION_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1,"
@@ -254,72 +254,92 @@ def generate_system_docker_compose(total_clients=0):
 
         # Filter dates between 01/09/2022 and 05/09/2022 included
         q4_filters_01092022_05092022 = get_filters_docker_services(
-            q4_filter_01092022_05092022_prefix, q4_filter_01092022_05092022_instances,
+            q4_filter_01092022_05092022_prefix,
+            q4_filter_01092022_05092022_instances,
             filter_field="Timestamp", filter_op="in", filter_value='["2022/09/01", "2022/09/05"]',
             input_exchange="q4_reduced_data_exc",
-            output_exchange="q4_splitter_exc",
+            output_exchange="q4_splitters_exc",
             n_upstream=q4_data_reducer_instances,
             output_shards=q4_splitters_by_origin_and_dest_instances,
         )
         system = system | q4_filters_01092022_05092022
 
-        # Split by origin account so each worker can count distinct destinations.
+        # Outgoing edges
+        ## Split by origin account so each worker can count distinct destinations for outgoing transactions.
         q4_splitters_by_origin_and_dest = get_splitter_docker_services(
-            q4_splitters_by_origin_and_dest_prefix, q4_splitters_by_origin_and_dest_instances,
-            input_exchange="q4_splitter_exc",
-            output_exchange="q4_split_by_origin_and_dest_exc",
+            q4_splitters_by_origin_and_dest_out_prefix,
+            q4_splitters_by_origin_and_dest_instances,
+            input_exchange="q4_splitters_exc",
+            output_exchange="q4_out_edges_filter_exc",
             key_fields=["From Bank", "Account"],
             n_upstream=q4_filter_01092022_05092022_instances,
-            output_shards=q4_transaction_graph_instances,
+            output_shards=q4_edges_filter_instances,
         )
         system = system | q4_splitters_by_origin_and_dest
 
-        # Create subgraphs of transactions
+        ## Create outgoing edges filter
         q4_transactions_graphs = get_scatter_gather_services(
-            q4_transaction_graph_prefix, q4_transaction_graph_instances,
-            "sub_graph_agg",
-            input_exchange="q4_split_by_origin_and_dest_exc",
-            output_exchange="q4_edges_exc",
+            q4_out_edges_filter_prefix,
+            q4_edges_filter_instances,
+            "out_edges_filter",
+            input_exchange="q4_out_edges_filter_exc",
+            output_exchange="q4_candidates_edges_exc",
             n_upstream=q4_splitters_by_origin_and_dest_instances,
             output_shards=q4_paths_creators_instances,
         )
         system = system | q4_transactions_graphs
 
+        # Incoming edges
+        ## Split by origin account so each worker can count distinct destinations for incoming transactions.
+        q4_splitters_by_origin_and_dest = get_splitter_docker_services(
+            q4_splitters_by_origin_and_dest_inc_prefix,
+            q4_splitters_by_origin_and_dest_instances,
+            input_exchange="q4_splitters_exc",
+            output_exchange="q4_inc_edges_filter_exc",
+            key_fields=["To Bank", "Account.1"],
+            n_upstream=q4_filter_01092022_05092022_instances,
+            output_shards=q4_edges_filter_instances,
+        )
+        system = system | q4_splitters_by_origin_and_dest
+
+        ## Create incoming edges filter
+        q4_inc_edges_filters = get_scatter_gather_services(
+            q4_inc_edges_filter_prefix,
+            q4_edges_filter_instances,
+            "inc_edges_filter",
+            input_exchange="q4_inc_edges_filter_exc",
+            output_exchange="q4_candidates_edges_exc",
+            n_upstream=q4_splitters_by_origin_and_dest_instances,
+            output_shards=q4_paths_creators_instances,
+        )
+        system = system | q4_inc_edges_filters
+
         # Paths creators
+        q4_total_edges_filters = 2*q4_edges_filter_instances
         q4_paths_creators = get_scatter_gather_services(
-            q4_paths_creators_prefix, q4_paths_creators_instances,
+            q4_paths_creators_prefix,
+            q4_paths_creators_instances,
             "paths_creator",
-            input_exchange="q4_edges_exc",
+            input_exchange="q4_candidates_edges_exc",
             output_exchange="q4_paths_exc",
-            n_upstream=q4_transaction_graph_instances,
-            output_shards=q4_paths_splitters_by_ends_instances,
+            n_upstream=q4_total_edges_filters,
+            output_shards=q4_paths_aggregator_instances,
         )
         system = system | q4_paths_creators
 
-        # Split by origin and destination nodes
-        q4_paths_splitters_by_ends = get_splitter_docker_services(
-            q4_paths_splitters_by_ends_prefix, q4_paths_splitters_by_ends_instances,
-            input_exchange="q4_paths_exc",
-            output_exchange="q4_unique_paths_counter_exc",
-            key_fields=["From Bank", "Account", "To Bank", "Account.1"],
-            n_upstream=q4_paths_creators_instances,
-            output_shards=q4_unique_paths_counters_instances
-        )
-        system = system | q4_paths_splitters_by_ends
-
         # Unique paths counters
-        q4_unique_paths_counters = get_scatter_gather_services(
-            q4_unique_paths_counters_prefix,
-            q4_unique_paths_counters_instances,
+        q4_paths_aggregator = get_scatter_gather_services(
+            q4_paths_aggregator_prefix,
+            q4_paths_aggregator_instances,
             "unique_paths_count",
-            input_exchange="q4_unique_paths_counter_exc",
+            input_exchange="q4_paths_exc",
             output_queue="results_4",
-            n_upstream=q4_paths_splitters_by_ends_instances,
+            n_upstream=q4_paths_creators_instances,
             total_clients=total_clients,
         )
-        for name, config in q4_unique_paths_counters.items():
+        for name, config in q4_paths_aggregator.items():
             config["environment"].append("BATCH_SIZE=1000")
-        system = system | q4_unique_paths_counters
+        system = system | q4_paths_aggregator
 
         # =========================================================
         # QUERY 5
