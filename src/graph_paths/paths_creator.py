@@ -8,23 +8,23 @@ class PathsCreator(WorkerBase):
 
     def __init__(self):
         super().__init__()
-        self.incoming_edges = defaultdict(lambda: defaultdict(list))
-        self.outgoing_edges = defaultdict(lambda: defaultdict(list))
+        self.incoming_edges = defaultdict(lambda: defaultdict(set))
+        self.outgoing_edges = defaultdict(lambda: defaultdict(set))
 
     def process(self, data):
-        c_id = str(data["client_id"])
+        client_id = data["client_id"]
         role = data.get("Role")
         
-        o_bank, o_acc = data["From Bank"], data["Account"]
-        d_bank, d_acc = data["To Bank"], data["Account.1"]
+        o_bank, origin_acc = data["From Bank"], data["Account"]
+        dest_bank, dest_acc = data["To Bank"], data["Account.1"]
         
-        origen = f"{o_bank},{o_acc}"
-        destino = f"{d_bank},{d_acc}"
+        origen = f"{o_bank},{origin_acc}"
+        destino = f"{dest_bank},{dest_acc}"
 
         if role == "incoming_to_interm":
-            self.incoming_edges[c_id][destino].append(origen)
+            self.incoming_edges[client_id][destino].add(origen)
         elif role == "outgoing_from_interm":
-            self.outgoing_edges[c_id][origen].append(destino)
+            self.outgoing_edges[client_id][origen].add(destino)
 
         return []
 
@@ -34,27 +34,26 @@ class PathsCreator(WorkerBase):
                 yield from self.on_eof(c_id)
             return
 
-        c_id = str(client_id)
         local_pair_counts = defaultdict(int)
 
-        interms = set(self.incoming_edges[c_id].keys()).intersection(self.outgoing_edges[c_id].keys())
+        interms = set(self.incoming_edges[client_id].keys()).intersection(self.outgoing_edges[c_id].keys())
         
         for interm in interms:
-            for origen in self.incoming_edges[c_id][interm]:
-                for destino in self.outgoing_edges[c_id][interm]:
+            for origen in self.incoming_edges[client_id][interm]:
+                for destino in self.outgoing_edges[client_id][interm]:
                     if origen != destino:
                         local_pair_counts[(origen, destino)] += 1
 
         for (origen, destino), count in local_pair_counts.items():
             yield {
-                "client_id": c_id,
+                "client_id": client_id,
                 "Origin": origen,
                 "Dest": destino,
                 "PathsCount": count
             }
 
-        self.incoming_edges.pop(c_id, None)
-        self.outgoing_edges.pop(c_id, None)
+        self.incoming_edges.pop(client_id, None)
+        self.outgoing_edges.pop(client_id, None)
 
     def _routing_key(self, msg: dict) -> str:
         key = f"{msg['Origin']}||{msg['Dest']}"
