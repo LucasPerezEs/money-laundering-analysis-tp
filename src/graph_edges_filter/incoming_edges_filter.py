@@ -17,15 +17,15 @@ class IncomingEdgesFilter(WorkerBase):
         os.makedirs(self.tmp_dir, exist_ok=True)
 
     def process(self, data):
-        c_id = str(data["client_id"])
+        client_id = str(data["client_id"])
         
-        o_bank, o_acc = data["From Bank"], data["Account"]
-        d_bank, d_acc = data["To Bank"], data["Account.1"]
+        origin_bank, origin_acc = data["From Bank"], data["Account"]
+        dest_bank, dest_acc = data["To Bank"], data["Account.1"]
         
-        origen = f"{o_bank},{o_acc}"
-        destino = f"{d_bank},{d_acc}"
+        origen = f"{origin_bank},{origin_acc}"
+        destino = f"{dest_bank},{dest_acc}"
         
-        unique_set = self.unique_origins_by_client[c_id][destino]
+        unique_set = self.unique_origins_by_client[client_id][destino]
 
         if len(unique_set) >= self.min_incoming:
             data["Role"] = "outgoing_from_interm"
@@ -34,7 +34,7 @@ class IncomingEdgesFilter(WorkerBase):
         unique_set.add(origen)
 
         dest_hash = abs(zlib.crc32(destino.encode('utf-8')))
-        filepath = os.path.join(self.tmp_dir, f"{c_id}_{dest_hash}.jsonl")
+        filepath = os.path.join(self.tmp_dir, f"{client_id}_{dest_hash}.jsonl")
 
         if len(unique_set) == self.min_incoming:
             results = []
@@ -60,22 +60,21 @@ class IncomingEdgesFilter(WorkerBase):
 
     def on_eof(self, client_id=None):
         if client_id is None:
-            for c_id in list(self.unique_origins_by_client.keys()):
-                yield from self.on_eof(c_id)
+            for origin_client_id in list(self.unique_origins_by_client.keys()):
+                yield from self.on_eof(origin_client_id)
             return
 
-        c_id = str(client_id)
-        if c_id not in self.unique_origins_by_client:
+        if client_id not in self.unique_origins_by_client:
             return
 
-        for destino, unique_set in self.unique_origins_by_client[c_id].items():
+        for destino, unique_set in self.unique_origins_by_client[client_id].items():
             if len(unique_set) < self.min_incoming:
                 dest_hash = abs(zlib.crc32(destino.encode('utf-8')))
-                filepath = os.path.join(self.tmp_dir, f"{c_id}_{dest_hash}.jsonl")
+                filepath = os.path.join(self.tmp_dir, f"{client_id}_{dest_hash}.jsonl")
                 if os.path.exists(filepath):
                     os.remove(filepath)
 
-        del self.unique_origins_by_client[c_id]
+        del self.unique_origins_by_client[client_id]
 
     def _routing_key(self, msg: dict) -> str:
         key = f"{msg['From Bank']}{msg['Account']}"
