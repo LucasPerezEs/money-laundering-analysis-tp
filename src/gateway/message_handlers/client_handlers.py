@@ -61,48 +61,31 @@ def _build_output_queue(mom_host, output_queue, output_exchange, output_shards=1
     raise Exception("FATAL: no output given for data processing")
 
 
-def client_dispatcher(client_id, client_socket, outbox, ready_event):
-    ready_event.wait() 
-
+def client_dispatcher(client_id, client_socket, outbox, ack_queue, send_lock):
     while True:
         try:
             msg_type, payload = outbox.get()
 
-            if msg_type == "ROWS":
-                query_id, rows = payload
-                message_protocol.external.send_msg(
-                    client_socket, 
-                    message_protocol.external.MsgType.QUERY_RESULT_BATCH, 
-                    client_id, 
-                    query_id, 
-                    rows
-                )
-                
-            elif msg_type == "END_QUERY":
-                query_id = payload
-                message_protocol.external.send_msg(
-                    client_socket, 
-                    message_protocol.external.MsgType.END_QUERY, 
-                    client_id, 
-                    query_id
-                )
-                
-            elif msg_type == "END_RESULTS":
-                message_protocol.external.send_msg(
-                    client_socket, 
-                    message_protocol.external.MsgType.END_RESULTS, 
-                    client_id
-                )
-                msg_type_ack, ack_payload = message_protocol.external.recv_msg(client_socket)
-                break 
+            with send_lock:
+                if msg_type == "ROWS":
+                    query_id, rows = payload
+                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.QUERY_RESULT_BATCH, client_id, query_id, rows)
+                elif msg_type == "END_QUERY":
+                    query_id = payload
+                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.END_QUERY, client_id, query_id)
+                elif msg_type == "END_RESULTS":
+                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.END_RESULTS, client_id)
 
-            msg_type_ack, ack_payload = message_protocol.external.recv_msg(client_socket)
-            if msg_type_ack != message_protocol.external.MsgType.ACK or ack_payload != client_id:
-                logging.error(f"Error de ACK en despachador para {client_id}")
+            ack_payload = ack_queue.get()
+            if ack_payload != client_id:
+                logging.info(f"Error de ACK en despachador para {client_id}")
+                break
+
+            if msg_type == "END_RESULTS":
                 break
 
         except Exception as e:
-            logging.error(f"Error enviando al cliente {client_id}: {e}")
+            logging.info(f"Error enviando al cliente {client_id}: {e}")
             break
 
     client_socket.close()
@@ -112,7 +95,6 @@ def handle_client_request(
     client_socket,
     client_sockets,
     bank_maps,
-    client_ready_events,
     client_outboxes,
     mom_host,
     output_queue,
@@ -121,7 +103,9 @@ def handle_client_request(
     client_checkpoints,
     client_semaphores,
     checkpoint_barriers,
-    checkpoint_lock
+    checkpoint_lock,
+    client_ack_queues,
+    client_send_locks,
 ):
     handler = message_handler.MessageHandler()
     client_id = None
@@ -139,6 +123,11 @@ def handle_client_request(
                 client_socket.close() 
                 raise e
 
+            if msg_type == message_protocol.external.MsgType.ACK:
+                if client_id is not None:
+                    client_ack_queues[client_id].put(payload)
+                continue
+
             if msg_type in (
                 message_protocol.external.MsgType.ACCOUNTS_BATCH,
                 message_protocol.external.MsgType.TRANSACTIONS_BATCH,
@@ -147,13 +136,16 @@ def handle_client_request(
                 if client_id is None:
                     client_id = msg_client_id
                     client_sockets[client_id] = client_socket
-                    client_ready_events[client_id] = threading.Event()
-                    client_outboxes[client_id] = queue.Queue()
+                    
+                    # Fix del limite de memoria en la cola + Nuevas variables full duplex
+                    client_outboxes[client_id] = queue.Queue(maxsize=50)
+                    client_ack_queues[client_id] = queue.Queue()
+                    client_send_locks[client_id] = threading.Lock()
                     client_semaphores[client_id] = threading.Semaphore(max_in_flight_batches)
 
                     t_disp = threading.Thread(
                         target=client_dispatcher,
-                        args=(client_id, client_socket, client_outboxes[client_id], client_ready_events[client_id])
+                        args=(client_id, client_socket, client_outboxes[client_id], client_ack_queues[client_id], client_send_locks[client_id])
                     )
                     t_disp.daemon = True
                     t_disp.start()
@@ -163,7 +155,8 @@ def handle_client_request(
 
             if msg_type == message_protocol.external.MsgType.ACCOUNTS_BATCH:
                 _update_bank_map(bank_maps, client_id, rows)
-                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK, client_id)
+                with client_send_locks[client_id]:
+                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK, client_id)
                 continue
 
             if msg_type == message_protocol.external.MsgType.END_ACCOUNTS:
@@ -172,19 +165,22 @@ def handle_client_request(
                     client_id = msg_client_id
                     client_sockets[client_id] = client_socket
                     
-                    client_ready_events[client_id] = threading.Event()
-                    client_outboxes[client_id] = queue.Queue()
+                    client_outboxes[client_id] = queue.Queue(maxsize=50)
+                    client_ack_queues[client_id] = queue.Queue()
+                    client_send_locks[client_id] = threading.Lock()
                     client_semaphores[client_id] = threading.Semaphore(max_in_flight_batches)
 
                     t_disp = threading.Thread(
                         target=client_dispatcher,
-                        args=(client_id, client_socket, client_outboxes[client_id], client_ready_events[client_id])
+                        args=(client_id, client_socket, client_outboxes[client_id], client_ack_queues[client_id], client_send_locks[client_id])
                     )
                     t_disp.daemon = True
                     t_disp.start()
                 elif msg_client_id != client_id:
                     raise ValueError("Client id mismatch in end accounts")
-                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK, client_id)
+                
+                with client_send_locks[client_id]:
+                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK, client_id)
                 continue
 
             if msg_type == message_protocol.external.MsgType.TRANSACTIONS_BATCH:
@@ -216,7 +212,9 @@ def handle_client_request(
                     output.send_eof_to_all(checkpoint_msg)
                 else:
                     output.send(checkpoint_msg)
-                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK, client_id)
+                
+                with client_send_locks[client_id]:
+                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK, client_id)
                 continue
 
             if msg_type == message_protocol.external.MsgType.END_TRANSACTIONS:
@@ -226,11 +224,15 @@ def handle_client_request(
                 if client_id is None:
                     client_id = msg_client_id
                     client_sockets[client_id] = client_socket
-                    client_ready_events[client_id] = threading.Event()
-                    client_outboxes[client_id] = queue.Queue()
+                    
+                    client_outboxes[client_id] = queue.Queue(maxsize=50)
+                    client_ack_queues[client_id] = queue.Queue()
+                    client_send_locks[client_id] = threading.Lock()
+                    client_semaphores[client_id] = threading.Semaphore(max_in_flight_batches)
+                    
                     t_disp = threading.Thread(
                         target=client_dispatcher,
-                        args=(client_id, client_socket, client_outboxes[client_id], client_ready_events[client_id])
+                        args=(client_id, client_socket, client_outboxes[client_id], client_ack_queues[client_id], client_send_locks[client_id])
                     )
                     t_disp.daemon = True
                     t_disp.start()
@@ -241,15 +243,29 @@ def handle_client_request(
                 else:
                     output.send(serialized_message)
 
-                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK, client_id)
-                client_ready_events[client_id].set()
-                return 
+                output.close()
+                output = None
+
+                with client_send_locks[client_id]:
+                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK, client_id)
+
+                continue
 
             raise TypeError(f"Unexpected message type: {msg_type}")
     except Exception as e:
-        logging.error(f"Handler error for client {client_id}: {e}")
-        logging.error(traceback.format_exc())
-        client_socket.close() 
+        error_name = type(e).__name__
+
+        if error_name == 'IncompleteReadError' and getattr(e, 'partial', None) == b'':
+            logging.info(f"El cliente {client_id} cerró el socket tras finalizar.")
+        elif error_name in ('ConnectionResetError', 'ConnectionAbortedError', 'BrokenPipeError', 'OSError'):
+            logging.info(f"Conexión finalizada con el cliente {client_id}.")
+        else:
+            logging.error(f"Handler error for client {client_id}: {e}")
+            logging.error(traceback.format_exc())
+        try:
+            client_socket.close() 
+        except:
+            pass
     finally:
         if output is not None:
             output.close()

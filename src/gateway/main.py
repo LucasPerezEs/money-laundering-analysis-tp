@@ -39,10 +39,11 @@ def main():
     client_sockets = {}
     bank_maps = {}
     client_query_eofs = {}
-    client_ready_events = {} 
     client_outboxes = {}
     client_checkpoints = {}
     client_semaphores = {}
+    client_ack_queues = {}
+    client_send_locks = {}
     checkpoint_barriers = {}
     checkpoint_lock = threading.Lock()
 
@@ -89,7 +90,6 @@ def main():
                     client_socket,
                     client_sockets,
                     bank_maps,
-                    client_ready_events,
                     client_outboxes,
                     MOM_HOST,
                     OUTPUT_QUEUE,
@@ -99,6 +99,8 @@ def main():
                     client_semaphores,
                     checkpoint_barriers,
                     checkpoint_lock,
+                    client_ack_queues,
+                    client_send_locks,
                 ),
             )
 
