@@ -36,7 +36,7 @@ class PathsCreator(WorkerBase):
 
         local_pair_counts = defaultdict(int)
 
-        interms = set(self.incoming_edges[client_id].keys()).intersection(self.outgoing_edges[c_id].keys())
+        interms = set(self.incoming_edges[client_id].keys()).intersection(self.outgoing_edges[client_id].keys())
         
         for interm in interms:
             for origen in self.incoming_edges[client_id][interm]:
