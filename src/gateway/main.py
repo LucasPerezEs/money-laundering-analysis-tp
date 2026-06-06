@@ -2,12 +2,19 @@ import logging
 import socket
 import threading
 import os
-
+import sys
+import time
 from message_handlers import client_handlers, result_handlers
+from common.health.health_server import HealthCheckServer
 
 
 def main():
     logging.basicConfig(level=logging.INFO)
+
+    # Health check server para que el monitor pueda verificar que el gateway está vivo
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    _hs = HealthCheckServer()
+    _hs.start_health_server()
 
     SERVER_HOST = os.environ.get("SERVER_HOST")
     PORT = int(os.environ.get("SERVER_PORT"))
@@ -74,7 +81,7 @@ def main():
         )
         t.daemon = True
         t.start()
-
+        time.sleep(1)
         logging.info(f"Started result handler for queue: {queue_name}")
 
     # Main clients loop

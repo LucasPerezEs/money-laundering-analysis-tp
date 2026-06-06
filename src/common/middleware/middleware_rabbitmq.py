@@ -29,8 +29,9 @@ class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
             self.queue_name = queue_name
             self.channel.queue_declare(queue=queue_name)
         except Exception:
-            if self.connection.is_open:
+            if hasattr(self, 'connection') and self.connection.is_open:
                 self.connection.close()
+            raise
 
     
     def start_consuming(self, on_message_callback):
@@ -113,7 +114,7 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
                 
 
         except Exception:
-            if self.connection.is_open:
+            if hasattr(self, 'connection') and self.connection.is_open:
                 self.connection.close()
             raise
     

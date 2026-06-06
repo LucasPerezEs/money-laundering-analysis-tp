@@ -29,6 +29,8 @@ from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 from common.middleware.middleware_sharded import ShardedExchangeConsumer, ShardedExchangeProducer
 from common.middleware.middleware import MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError
 from common.message_protocol.internal import deserialize, serialize
+from common.health.health_server import HealthCheckServer
+
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +51,7 @@ def _wait_for_rabbitmq():
             time.sleep(RECONNECT_DELAY)
 
 
-class WorkerBase:
+class WorkerBase(HealthCheckServer):
 
     def __init__(self):
         self.input_queue     = os.environ.get("INPUT_QUEUE", "")
@@ -69,7 +71,18 @@ class WorkerBase:
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
         _wait_for_rabbitmq()
-        self._setup_connections()
+        self.start_health_server()
+        
+        attempt = 0
+        while True:
+            try:
+                _wait_for_rabbitmq()
+                self._setup_connections()
+                break
+            except Exception as e:
+                logger.warning(f"Fallo temporal de red/DNS iniciando conexiones: {e}. Reintentando...")
+                self._reconnect_backoff(attempt)
+                attempt += 1
 
     def _setup_connections(self):
         # Input
@@ -81,6 +94,11 @@ class WorkerBase:
             self._consumer = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, self.input_queue)
         else:
             raise ValueError("Se requiere INPUT_QUEUE o INPUT_EXCHANGE + SHARD_ID")
+
+        # cleanup_exc = os.environ.get("CLEANUP_EXCHANGE", "cleanup_exc")
+        # self._cleanup_consumer = ShardedExchangeConsumer(
+        #     RABBITMQ_HOST, cleanup_exc, self.shard_id, self.consumer_group
+        # )
 
         # Output
         if self.output_exchange and self.output_shards >= 1:
@@ -230,6 +248,14 @@ class WorkerBase:
                         elif self._producer:
                             self._producer.send(checkpoint_body)
                         del checkpoint_counts[chk_key]
+                    ack()
+                    return
+                elif msg.get("type") == "cleanup":
+                    client_id = msg.get("client_id")
+                    # Limpiar cualquier estado residual de ese cliente
+                    self._buffer.pop(f"client:{client_id}", None)
+                    if hasattr(self, "_state"):
+                        self._state.pop(client_id, None)
                     ack()
                     return
                 elif msg.get("type") == "eof":

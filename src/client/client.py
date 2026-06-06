@@ -250,6 +250,10 @@ class Client:
                 if query_id in self._writers:
                     csvfile, _ = self._writers.pop(query_id)
                     csvfile.close()
+                else:
+                    # Si la query tuvo 0 resultados lo creamos vacío.
+                    file_path = os.path.join(output_dir, f"results_q{query_id}.csv")
+                    open(file_path, "w").close()
                 message_protocol.external.send_msg(
                     self.server_socket,
                     message_protocol.external.MsgType.ACK,

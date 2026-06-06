@@ -3,6 +3,6 @@ __pycache__/
 
 # Datasets
 datasets/*
-
+venv
 # Results
 results/*

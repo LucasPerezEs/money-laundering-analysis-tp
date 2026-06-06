@@ -40,6 +40,8 @@ from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 from common.middleware.middleware_sharded import ShardedExchangeConsumer, ShardedExchangeProducer
 from common.middleware.middleware import MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError
 from common.message_protocol.internal import deserialize, serialize
+from common.health.health_server import HealthCheckServer
+
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +62,7 @@ def _wait_for_rabbitmq():
             time.sleep(RECONNECT_DELAY)
 
 
-class WorkerBaseDoubleIO:
+class WorkerBaseDoubleIO(HealthCheckServer):
 
     def __init__(self):
         self.batch_size      = int(os.environ.get("BATCH_SIZE", "500"))
@@ -77,7 +79,10 @@ class WorkerBaseDoubleIO:
         self._running = True
 
         _wait_for_rabbitmq()
+        self.start_health_server()
         self._define_operation_mode()
+
+
 
 
     def _define_operation_mode(self):

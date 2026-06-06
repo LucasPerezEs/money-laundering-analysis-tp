@@ -77,6 +77,13 @@ class TransactionsGraphAgg(WorkerBase):
 
     def on_eof(self, client_id=None):
         client_id_str = str(client_id)
+        
+        if hasattr(self, '_eof_processed') and client_id_str in self._eof_processed:
+            return
+        if not hasattr(self, '_eof_processed'):
+            self._eof_processed = set()
+        self._eof_processed.add(client_id_str)
+        
         logging.info(f"EOF recibido para client_id={client_id_str}")
         
         log_path = f"/tmp/origins_shard_{self.shard_id}_client_{client_id_str}.log"
@@ -122,11 +129,11 @@ class TransactionsGraphAgg(WorkerBase):
 
         os.remove(log_path)
         logging.info("EOF procesado: archivo log temporal eliminado.")
-
+    
     def _routing_key(self, msg: dict) -> str:
         if msg[NEW_DATA_EDGE_TAG_KEY] == EDGES_INPUT_TAG:
             key = f"{msg[TRANSACTION_DESTINATION_BANK_KEY]}{msg[TRANSACTION_DESTINATION_ACC_KEY]}"
         else:
             key = f"{msg[TRANSACTION_ORIGIN_BANK_KEY]}{msg[TRANSACTION_ORIGIN_ACC_KEY]}"
 
-        return str(zlib.crc32(key) % self.output_shards)
+        return str(zlib.crc32(key.encode()) % self.output_shards)

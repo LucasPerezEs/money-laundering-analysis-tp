@@ -1,4 +1,15 @@
 services:
+  chaos_monkey:
+    build:
+      context: ./scripts
+    environment:
+    - CHAOS_TARGETS=usd_filter_0,q1_data_reducer_0,q1_filter_lt_50_0,q2_aggregator_0,q2_data_reducer_0,q3_avg_and_transactions_joiner_0,q3_avg_aggregators_preceding_period_0,q4_paths_creators_0,q5_money_converter_0
+    - CHAOS_INTERVAL=30
+    - CHAOS_MIN_WAIT=30
+    profiles:
+    - chaos
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
   client_0:
     build:
       context: ./src
@@ -13,9 +24,31 @@ services:
     - SERVER_HOST=gateway
     - SERVER_PORT=7659
     - BATCH_SIZE=5000
-    - TRANSACTIONS_FILE=/datasets/LI-Small_Trans.csv
-    - ACCOUNTS_FILE=/datasets/LI-Small_accounts.csv
+    - TRANSACTIONS_FILE=/datasets/transactions_medium_reduced.csv
+    - ACCOUNTS_FILE=/datasets/accounts_medium_reduced.csv
     - CLIENT_ID=0
+    - RESULTS_DIR=/results
+    - BATCH_SIZE=20000
+    volumes:
+    - ./datasets:/datasets
+    - ./results:/results
+  client_1:
+    build:
+      context: ./src
+      dockerfile: client/Dockerfile
+    container_name: client_1
+    depends_on:
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - SERVER_HOST=gateway
+    - SERVER_PORT=7659
+    - BATCH_SIZE=5000
+    - TRANSACTIONS_FILE=/datasets/transactions_medium_reduced.csv
+    - ACCOUNTS_FILE=/datasets/accounts_medium_reduced.csv
+    - CLIENT_ID=1
     - RESULTS_DIR=/results
     - BATCH_SIZE=20000
     volumes:
@@ -47,6 +80,57 @@ services:
     - QUERY_5_N_UPSTREAM=1
     - TRANSACTION_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1,Amount Paid,Payment
       Currency,Payment Format
+  monitor_0:
+    build:
+      context: ./src/monitor
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - MONITOR_ID=0
+    - SUCCESSORS=monitor_1,monitor_2
+    - HEALTH_PORT=8888
+    - CHECK_INTERVAL=10
+    - HEALTH_TIMEOUT=5
+    - MAX_FAILURES=4
+    - WORKERS=gateway,usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_prefix_0,q4_splitters_by_origin_and_dest_prefix_1,q4_splitters_by_origin_and_dest_prefix_2,q4_transaction_graph_0,q4_transaction_graph_1,q4_transaction_graph_2,q4_transaction_graph_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_splitters_by_ends_0,q4_paths_splitters_by_ends_1,q4_paths_splitters_by_ends_2,q4_paths_splitters_by_ends_3,q4_unique_paths_counters_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0
+    restart: unless-stopped
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  monitor_1:
+    build:
+      context: ./src/monitor
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - MONITOR_ID=1
+    - SUCCESSORS=monitor_2,monitor_0
+    - HEALTH_PORT=8888
+    - CHECK_INTERVAL=10
+    - HEALTH_TIMEOUT=5
+    - MAX_FAILURES=4
+    - WORKERS=gateway,usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_prefix_0,q4_splitters_by_origin_and_dest_prefix_1,q4_splitters_by_origin_and_dest_prefix_2,q4_transaction_graph_0,q4_transaction_graph_1,q4_transaction_graph_2,q4_transaction_graph_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_splitters_by_ends_0,q4_paths_splitters_by_ends_1,q4_paths_splitters_by_ends_2,q4_paths_splitters_by_ends_3,q4_unique_paths_counters_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0
+    restart: unless-stopped
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  monitor_2:
+    build:
+      context: ./src/monitor
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - MONITOR_ID=2
+    - SUCCESSORS=monitor_0,monitor_1
+    - HEALTH_PORT=8888
+    - CHECK_INTERVAL=10
+    - HEALTH_TIMEOUT=5
+    - MAX_FAILURES=4
+    - WORKERS=gateway,usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_prefix_0,q4_splitters_by_origin_and_dest_prefix_1,q4_splitters_by_origin_and_dest_prefix_2,q4_transaction_graph_0,q4_transaction_graph_1,q4_transaction_graph_2,q4_transaction_graph_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_splitters_by_ends_0,q4_paths_splitters_by_ends_1,q4_paths_splitters_by_ends_2,q4_paths_splitters_by_ends_3,q4_unique_paths_counters_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0
+    restart: unless-stopped
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
   q1_data_reducer_0:
     build:
       context: ./src
@@ -64,7 +148,7 @@ services:
     - OUTPUT_EXCHANGE=q1_reduced_exc
     - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
   q1_data_reducer_1:
     build:
       context: ./src
@@ -82,7 +166,7 @@ services:
     - OUTPUT_EXCHANGE=q1_reduced_exc
     - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
   q1_data_reducer_2:
     build:
       context: ./src
@@ -100,7 +184,7 @@ services:
     - OUTPUT_EXCHANGE=q1_reduced_exc
     - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
   q1_filter_lt_50_0:
     build:
       context: ./src
@@ -120,7 +204,7 @@ services:
     - FILTER_FIELD=Amount Paid
     - FILTER_OP=lt
     - FILTER_VALUE=50
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
     - BATCH_SIZE=5000
   q1_filter_lt_50_1:
     build:
@@ -141,7 +225,7 @@ services:
     - FILTER_FIELD=Amount Paid
     - FILTER_OP=lt
     - FILTER_VALUE=50
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
     - BATCH_SIZE=5000
   q2_aggregator_0:
     build:
@@ -163,7 +247,7 @@ services:
     - AGG_FIELD=Amount Paid
     - KEY_FIELD=From Bank
     - CARRY_FIELDS=Account
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
     - BATCH_SIZE=5000
   q2_aggregator_1:
     build:
@@ -185,7 +269,7 @@ services:
     - AGG_FIELD=Amount Paid
     - KEY_FIELD=From Bank
     - CARRY_FIELDS=Account
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
     - BATCH_SIZE=5000
   q2_data_reducer_0:
     build:
@@ -204,7 +288,7 @@ services:
     - OUTPUT_EXCHANGE=q2_reduced_exc
     - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,Amount Paid
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
     - ROUTING_FIELD=From Bank
   q2_data_reducer_1:
     build:
@@ -223,7 +307,7 @@ services:
     - OUTPUT_EXCHANGE=q2_reduced_exc
     - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,Amount Paid
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
     - ROUTING_FIELD=From Bank
   q2_splitter_by_bank_0:
     build:
@@ -246,7 +330,7 @@ services:
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
     - SHARD_KEY_FIELD=From Bank
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
   q2_splitter_by_bank_1:
     build:
       context: ./src
@@ -268,7 +352,7 @@ services:
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
     - SHARD_KEY_FIELD=From Bank
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
   q2_splitter_by_bank_2:
     build:
       context: ./src
@@ -290,7 +374,7 @@ services:
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
     - SHARD_KEY_FIELD=From Bank
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
   q3_avg_aggregators_preceding_period_0:
     build:
       context: ./src
@@ -1064,7 +1148,7 @@ services:
     - CONSUMER_GROUP=q4_unique_paths_counters
     - SHARD_ID=0
     - OUTPUT_QUEUE=results_4
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
     - BATCH_SIZE=1000
   q5_counter_0:
     build:
@@ -1444,7 +1528,7 @@ services:
     - OUTPUT_QUEUE=results_5
     - AGG_OP=sum
     - AGG_FIELD=count
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
   rabbitmq:
     container_name: rabbitmq
     environment:
@@ -1479,7 +1563,7 @@ services:
     - FILTER_FIELD=Payment Currency
     - FILTER_OP=eq
     - FILTER_VALUE=US Dollar
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2
   usd_filter_1:
     build:
       context: ./src
@@ -1500,4 +1584,4 @@ services:
     - FILTER_FIELD=Payment Currency
     - FILTER_OP=eq
     - FILTER_VALUE=US Dollar
-    - TOTAL_CLIENTS=1
+    - TOTAL_CLIENTS=2

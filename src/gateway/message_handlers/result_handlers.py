@@ -4,6 +4,7 @@ import time
 
 from message_handlers import message_handler
 from common import middleware, message_protocol
+from common.middleware.middleware_sharded import ShardedExchangeProducer
 
 ACCOUNT_BANK_NAME_COL = "Bank Name"
 
@@ -92,12 +93,14 @@ def _normalize_result_rows(rows, query_id, bank_maps, client_id):
 
     return normalized
 
+
 def _handle_query_eof(
     client_id,
     query_id,
     client_outboxes,
     client_query_eofs,
     total_queries,
+    mom_host,
 ):
     outbox = client_outboxes.get(client_id)
     if not outbox:
@@ -112,6 +115,14 @@ def _handle_query_eof(
 
     if len(done) >= total_queries:
         outbox.put(("END_RESULTS", None))
+
+        # Al finalizar todas las queries de un cliente, publicar cleanup
+        cleanup_exchange = ShardedExchangeProducer(mom_host, "cleanup_exc", 1)
+        cleanup_msg = message_protocol.internal.serialize(
+            {"type": "cleanup", "client_id": client_id}
+        )
+        cleanup_exchange.send_to_shard(cleanup_msg, 0)
+        cleanup_exchange.close()
 
 
 def handle_client_response(
@@ -131,7 +142,18 @@ def handle_client_response(
     logging.basicConfig(level=logging.INFO)
     eof_count = {}
     checkpoint_counts = {} 
-    input_queue = middleware.MessageMiddlewareQueueRabbitMQ(mom_host, queue_name)
+    # Retry connecting to RabbitMQ up to 5 times
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            input_queue = middleware.MessageMiddlewareQueueRabbitMQ(mom_host, queue_name)
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logging.warning(f"Failed to connect to {queue_name}: {e}, retrying in 5s...")
+                time.sleep(5)
+            else:
+                raise
     handler = message_handler.MessageHandler()
 
     def _consume_result(message, ack, nack):
@@ -180,6 +202,7 @@ def handle_client_response(
                         client_outboxes,
                         client_query_eofs,
                         total_queries,
+                        mom_host,
                     )
                 ack()
                 return
@@ -191,7 +214,7 @@ def handle_client_response(
                 if len(payload) == 1:
                     client_id = payload[0]
                     if client_id in client_outboxes:
-                        _handle_query_eof(client_id, query_id, client_outboxes, client_query_eofs, total_queries)
+                        _handle_query_eof(client_id, query_id, client_outboxes, client_query_eofs, total_queries, mom_host)
                     ack()
                     return
 
