@@ -39,10 +39,10 @@ class PathsCreator(WorkerBase):
                         if start_node != final_dest:
                             new_paths.append({
                                 "client_id": client_id,
-                                "Origin Bank": start_node[0],
-                                "Origin Account": start_node[1],
-                                "Dest Bank": final_dest[0],
-                                "Dest Account": final_dest[1],
+                                "From Bank": start_node[0],
+                                "Account": start_node[1],
+                                "To Bank": final_dest[0],
+                                "Account.1": final_dest[1],
                             })
 
         # If for intermediate node it is incoming, then destination is intermediate
@@ -65,10 +65,10 @@ class PathsCreator(WorkerBase):
                         if start_node != final_dest:
                             new_paths.append({
                                 "client_id": client_id,
-                                "Origin Bank": start_node[0],
-                                "Origin Account": start_node[1],
-                                "Dest Bank": final_dest[0],
-                                "Dest Account": final_dest[1],
+                                "From Bank": start_node[0],
+                                "Account": start_node[1],
+                                "To Bank": final_dest[0],
+                                "Account.1": final_dest[1],
                             })
         else:
             return []
@@ -86,7 +86,10 @@ class PathsCreator(WorkerBase):
         return []
 
     def _routing_key(self, msg: dict) -> str:
-        key = f"{msg['Origin']}||{msg['Dest']}"
+        key = (
+            f"{msg['From Bank']}||{msg['Account']}||"
+            f"{msg['To Bank']}||{msg['Account.1']}"
+        )
         return str(zlib.crc32(key.encode('utf-8')) % self.output_shards)
 
 if __name__ == "__main__":
