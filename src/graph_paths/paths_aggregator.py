@@ -1,6 +1,9 @@
 import logging
 from common.middleware.worker_base import WorkerBase
 
+MIN_TOTAL_PATHS = 5
+
+
 class PathsAggregator(WorkerBase):
 
     def __init__(self):
@@ -20,23 +23,35 @@ class PathsAggregator(WorkerBase):
         return []
 
     def on_eof(self, client_id=None):
-        if client_id is not None and client_id in self.total_pair_counts:
-            unique_accounts = set()
+        if client_id is None:
+            return []
 
-            for (origin_bank, origin_acc, dest_bank, dest_acc), count in self.total_pair_counts[client_id].items():
-                unique_accounts.add((origin_bank, origin_acc))
-                unique_accounts.add((dest_bank, dest_acc))
+        pair_counts = self.total_pair_counts.pop(client_id, {})
+        unique_accounts = set()
+        qualified_pairs = 0
+        max_paths = 0
 
-            for bank, account in unique_accounts:
-                yield {
-                    "client_id": client_id,
-                    "Bank": bank,
-                    "Account": account
-                }
+        for (origin_bank, origin_acc, dest_bank, dest_acc), count in pair_counts.items():
+            max_paths = max(max_paths, count)
+            if count <= MIN_TOTAL_PATHS:
+                continue
 
-            del self.total_pair_counts[client_id]
-            
-        return []
+            qualified_pairs += 1
+            unique_accounts.add((origin_bank, origin_acc))
+            unique_accounts.add((dest_bank, dest_acc))
+
+        for bank, account in sorted(unique_accounts):
+            yield {
+                "client_id": client_id,
+                "Bank": bank,
+                "Account": account
+            }
+
+        logging.info(
+            "EOF procesado: "
+            f"pairs={len(pair_counts)} max_paths_for_pair={max_paths} "
+            f"qualified_pairs={qualified_pairs} emitted_accounts={len(unique_accounts)}"
+        )
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
