@@ -1,4 +1,6 @@
 from asyncio import IncompleteReadError
+import csv
+import io
 
 from . import external_serializer
 
@@ -30,7 +32,7 @@ def _recv_sized(socket, size):
     return bytes(buf)
 
 
-# Deserialize helpers
+# Deserialize helpers: length-prefixed strings and binary row batches.
 def _recv_string(socket):
     string_size = external_serializer.deserialize_uint32(
         _recv_sized(socket, external_serializer.UINT32_SIZE)
@@ -58,9 +60,21 @@ def _recv_rows(socket):
     return rows
 
 
+# Client input batches use a single CSV payload to reduce per-cell overhead.
+def _recv_csv_rows(socket):
+    payload_size = external_serializer.deserialize_uint32(
+        _recv_sized(socket, external_serializer.UINT32_SIZE)
+    )
+    payload = _recv_sized(socket, payload_size)
+    if not payload:
+        return []
+    csv_buffer = io.StringIO(payload.decode("utf-8"), newline="")
+    return [row for row in csv.reader(csv_buffer)]
+
+
 def _recv_client_rows(socket):
     client_id = _recv_string(socket)
-    rows = _recv_rows(socket)
+    rows = _recv_csv_rows(socket)
     return (client_id, rows)
 
 
@@ -69,7 +83,7 @@ def _recv_query_result_batch(socket):
     query_id = external_serializer.deserialize_uint32(
         _recv_sized(socket, external_serializer.UINT32_SIZE)
     )
-    rows = _recv_rows(socket)
+    rows = _recv_csv_rows(socket)
     return (client_id, query_id, rows)
 
 
@@ -93,10 +107,6 @@ def _recv_ack(socket):
     return _recv_string(socket)
 
 
-def _recv_empty(socket):
-    return None
-
-
 # Receive handlers
 RECV_MSG_HANDLERS = {
     MsgType.TRANSACTIONS_BATCH: _recv_client_rows,
@@ -118,7 +128,7 @@ def recv_msg(socket):
     return (msg_type, msg_handler(socket))
 
 
-# Serialize helpers
+# Serialize helpers: length-prefixed strings and binary row batches.
 def _serialize_string(value):
     encoded = external_serializer.serialize_string(value)
     return b"".join([
@@ -141,12 +151,29 @@ def _serialize_rows(rows):
     return b"".join(parts)
 
 
+# Client input batches use a single CSV payload to reduce per-cell overhead.
+def _serialize_csv_rows(rows):
+    csv_buffer = io.StringIO(newline="")
+    writer = csv.writer(csv_buffer, lineterminator="\n")
+    writer.writerows(rows)
+    return _serialize_csv_payload(csv_buffer.getvalue())
+
+
+def _serialize_csv_payload(payload):
+    if isinstance(payload, str):
+        payload = payload.encode("utf-8")
+    return b"".join([
+        external_serializer.serialize_uint32(len(payload)),
+        payload,
+    ])
+
+
 # Send handlers
 def _send_transactions_batch(socket, client_id, rows):
     socket.sendall(b"".join([
         external_serializer.serialize_uint32(MsgType.TRANSACTIONS_BATCH),
         _serialize_string(client_id),
-        _serialize_rows(rows),
+        _serialize_csv_rows(rows),
     ]))
 
 
@@ -154,7 +181,7 @@ def _send_accounts_batch(socket, client_id, rows):
     socket.sendall(b"".join([
         external_serializer.serialize_uint32(MsgType.ACCOUNTS_BATCH),
         _serialize_string(client_id),
-        _serialize_rows(rows),
+        _serialize_csv_rows(rows),
     ]))
 
 
@@ -177,7 +204,7 @@ def _send_query_result_batch(socket, client_id, query_id, rows):
         external_serializer.serialize_uint32(MsgType.QUERY_RESULT_BATCH),
         _serialize_string(client_id),
         external_serializer.serialize_uint32(query_id),
-        _serialize_rows(rows),
+        _serialize_csv_rows(rows),
     ]))
 
 
@@ -218,3 +245,13 @@ SEND_MSG_HANDLERS = {
 def send_msg(socket, msg_type, *args):
     msg_handler = SEND_MSG_HANDLERS[msg_type]
     msg_handler(socket, *args)
+
+
+def send_client_csv_batch(socket, msg_type, client_id, csv_payload):
+    if msg_type not in (MsgType.TRANSACTIONS_BATCH, MsgType.ACCOUNTS_BATCH):
+        raise ValueError("send_client_csv_batch only supports client input batches")
+    socket.sendall(b"".join([
+        external_serializer.serialize_uint32(msg_type),
+        _serialize_string(client_id),
+        _serialize_csv_payload(csv_payload),
+    ]))

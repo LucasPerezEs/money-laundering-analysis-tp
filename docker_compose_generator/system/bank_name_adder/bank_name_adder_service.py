@@ -4,7 +4,7 @@ import yaml
 
 # Config file
 BASE_DIR = os.path.dirname(__file__)
-CONFIG_FILE = os.path.join(BASE_DIR, "barrier_filter_config.yaml")
+CONFIG_FILE = os.path.join(BASE_DIR, "bank_name_adder_config.yaml")
 
 # Build section
 DOCKER_BUILD_SECTION_NAME = "build"
@@ -24,26 +24,34 @@ CONSUMER_GROUP_TAG = "CONSUMER_GROUP"
 SHARD_ID_TAG="SHARD_ID"
 MAIN_N_UPSTREAM_TAG="MAIN_N_UPSTREAM"
 SEC_N_UPSTREAM_TAG="SECONDARY_N_UPSTREAM"
-OUTPUT_QUEUE_TAG = "MAIN_OUTPUT_QUEUE"
-OUTPUT_EXCHANGE_TAG = "MAIN_OUTPUT_EXCHANGE"
+MAIN_OUTPUT_QUEUE_TAG = "MAIN_OUTPUT_QUEUE"
+MAIN_OUTPUT_EXCHANGE_TAG = "MAIN_OUTPUT_EXCHANGE"
+SEC_OUTPUT_QUEUE_TAG = "SECONDARY_OUTPUT_QUEUE"
+SEC_OUTPUT_EXCHANGE_TAG = "SECONDARY_OUTPUT_EXCHANGE"
+SEC_OUTPUT_SHARDS_TAG = "SECONDARY_OUTPUT_SHARDS"
 
-def get_barrier_filters_services(service_prefix, total_instances,
+def get_bank_name_adders_services(service_prefix, total_instances,
                         main_input_queue=None, main_input_exchange=None, main_n_upstream=None,
                         sec_input_queue=None, sec_input_exchange=None, sec_n_upstream=None,
-                        output_queue=None, output_exchange=None,
+                        main_output_queue=None, main_output_exchange=None,
+                        sec_output_queue=None, sec_output_exchange=None,
+                        main_output_shards=1, sec_output_shards=1,
                         ):
     with open(CONFIG_FILE, "r") as config_file:
-        base_barrier_filter_service = yaml.safe_load(config_file)
+        base_bank_name_adder_service = yaml.safe_load(config_file)
 
     # Create all services
     aggregator_services = {}
     for i in range(total_instances):
         # Copy service base configuration
-        new_service_config = copy.deepcopy(base_barrier_filter_service)
+        new_service_config = copy.deepcopy(base_bank_name_adder_service)
 
         # Add container name
         new_service_name = f"{service_prefix}_{i}"
         new_service_config[CONTAINER_NAME_TAG] = new_service_name
+
+        # Add context folder
+        new_service_config[DOCKER_BUILD_SECTION_NAME][DOCKER_BUILD_CONTEXT_SUBSECTION_NAME] = "./src"
 
         # Add environment variables
         ## I/O
@@ -60,18 +68,29 @@ def get_barrier_filters_services(service_prefix, total_instances,
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SEC_INPUT_EXCHANGE_TAG}={sec_input_exchange}")
             if main_input_exchange is None:
                 new_service_config[DOCKER_ENV_VARS_NAME].append(f"{CONSUMER_GROUP_TAG}={service_prefix}")
-            if not any(SHARD_ID_TAG in elem for elem in new_service_config[DOCKER_ENV_VARS_NAME]):
-                new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SHARD_ID_TAG}={i}")
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SHARD_ID_TAG}={i}")
 
         if main_n_upstream is not None:
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{MAIN_N_UPSTREAM_TAG}={main_n_upstream}")
         if sec_n_upstream is not None:
             new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SEC_N_UPSTREAM_TAG}={sec_n_upstream}")
 
-        if output_queue is not None:
-            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_QUEUE_TAG}={output_queue}")
-        elif output_exchange is not None:
-            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{OUTPUT_EXCHANGE_TAG}={output_exchange}")
+        if main_output_queue is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{MAIN_OUTPUT_QUEUE_TAG}={main_output_queue}")
+        elif main_output_exchange is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{MAIN_OUTPUT_EXCHANGE_TAG}={main_output_exchange}")
+            if main_output_shards >= 1:
+                new_service_config[DOCKER_ENV_VARS_NAME].append(f"MAIN_OUTPUT_SHARDS={main_output_shards}")
+
+        if sec_output_queue is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SEC_OUTPUT_QUEUE_TAG}={sec_output_queue}")
+        elif sec_output_exchange is not None:
+            new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SEC_OUTPUT_EXCHANGE_TAG}={sec_output_exchange}")
+            if sec_output_shards >= 1:
+                new_service_config[DOCKER_ENV_VARS_NAME].append(f"{SEC_OUTPUT_SHARDS_TAG}={sec_output_shards}")
+
+        new_service_config[DOCKER_ENV_VARS_NAME].append("MAIN_EOF_DEST=SECONDARY")
+        new_service_config[DOCKER_ENV_VARS_NAME].append("SEC_EOF_DEST=NONE")
 
         # Add service in services dictionary
         aggregator_services[new_service_name] = new_service_config

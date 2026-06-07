@@ -6,4 +6,4 @@ depends_on:
     condition: service_healthy
 environment:
 - RABBITMQ_HOST=rabbitmq
-- N_UPSTREAM=1
+- BATCH_SIZE=5000

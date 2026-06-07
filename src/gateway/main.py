@@ -9,13 +9,14 @@ from message_handlers import client_handlers, result_handlers
 def main():
     logging.basicConfig(level=logging.INFO)
 
-    # Buscamos ambas variables por si tu compose usa SERVER_PORT en lugar de PORT
-    PORT = int(os.environ.get("SERVER_PORT", os.environ.get("PORT", 12345)))
+    SERVER_HOST = os.environ.get("SERVER_HOST")
+    PORT = int(os.environ.get("SERVER_PORT"))
     MOM_HOST = os.environ.get("MOM_HOST", "rabbitmq")
     OUTPUT_QUEUE = os.environ.get("OUTPUT_QUEUE", "")
     OUTPUT_EXCHANGE = os.environ.get("OUTPUT_EXCHANGE", "")
+    BANK_OUTPUT_QUEUE = os.environ.get("BANK_OUTPUT_QUEUE", "")
+    BANK_OUTPUT_EXCHANGE = os.environ.get("BANK_OUTPUT_EXCHANGE", "")
 
-    # FIX: limpiamos espacios y evitamos lista [""] si no existe la variable
     transaction_columns_raw = os.environ.get("TRANSACTION_COLUMNS", "")
     TRANSACTION_COLUMNS = [
         col.strip()
@@ -38,22 +39,22 @@ def main():
 
     # Diccionarios estándar y el Lock
     client_sockets = {}
-    bank_maps = {}
-    client_ready = {}
     client_query_eofs = {}
-    send_lock = threading.Lock()
+    client_outboxes = {}
+    client_checkpoints = {}
+    client_semaphores = {}
+    client_ack_queues = {}
+    client_send_locks = {}
+    checkpoint_barriers = {}
+    checkpoint_lock = threading.Lock()
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    # SO_REUSEADDR evita bloqueos del puerto al reiniciar Docker
-    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-    server_socket.bind(("0.0.0.0", PORT))
-    server_socket.listen(5)
+    server_socket.bind((SERVER_HOST, PORT))
+    server_socket.listen()
 
     logging.info(f"Listening to connections on port {PORT}")
 
-    # Lanzamos handlers de resultados
+    # Results handler
     for index, queue_name in enumerate(result_queues, start=1):
         n_upstream = int(os.environ.get(f"QUERY_{index}_N_UPSTREAM", "1"))
         t = threading.Thread(
@@ -61,27 +62,26 @@ def main():
             kwargs={
                 "queue_name": queue_name,
                 "client_sockets": client_sockets,
-                "bank_maps": bank_maps,
                 "client_query_eofs": client_query_eofs,
-                "client_ready": client_ready,
+                "client_outboxes": client_outboxes,
                 "mom_host": MOM_HOST,
                 "query_id": index,
                 "total_queries": TOTAL_QUERIES,
-                "send_lock": send_lock,
-                "n_upstream": n_upstream
+                "n_upstream": n_upstream,
+                "client_semaphores": client_semaphores,
+                "checkpoint_barriers": checkpoint_barriers,
+                "checkpoint_lock": checkpoint_lock,
             }
         )
-
         t.daemon = True
         t.start()
 
         logging.info(f"Started result handler for queue: {queue_name}")
 
-    # Bucle principal de clientes
+    # Main clients loop
     while True:
         try:
             client_socket, addr = server_socket.accept()
-
             logging.info(f"A new client has connected from {addr}")
 
             t = threading.Thread(
@@ -89,12 +89,19 @@ def main():
                 args=(
                     client_socket,
                     client_sockets,
-                    bank_maps,
-                    client_ready,
+                    client_outboxes,
                     MOM_HOST,
                     OUTPUT_QUEUE,
                     OUTPUT_EXCHANGE,
+                    BANK_OUTPUT_QUEUE,
+                    BANK_OUTPUT_EXCHANGE,
                     TRANSACTION_COLUMNS,
+                    client_checkpoints,
+                    client_semaphores,
+                    checkpoint_barriers,
+                    checkpoint_lock,
+                    client_ack_queues,
+                    client_send_locks,
                 ),
             )
 

@@ -18,17 +18,17 @@ Variables de entorno:
   OUTPUT_SHARDS   : cantidad de shards de salida (default 1)
   BATCH_SIZE      : filas por batch de salida (default 500)
 """
-import json
 import logging
 import os
 import random
 import signal
 import time
-import hashlib
+import zlib
 
 from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ, _connection_parameters
 from common.middleware.middleware_sharded import ShardedExchangeConsumer, ShardedExchangeProducer
 from common.middleware.middleware import MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError
+from common.message_protocol.internal import deserialize, serialize
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ def _wait_for_rabbitmq():
             conn.close()
             return
         except Exception:
-            logger.warning(f"RabbitMQ no disponible, reintentando en {RECONNECT_DELAY}s...")
+            logger.info(f"RabbitMQ no disponible, reintentando en {RECONNECT_DELAY}s...")
             time.sleep(RECONNECT_DELAY)
 
 
@@ -105,7 +105,7 @@ class WorkerBase:
 
     def _reconnect_backoff(self, attempt: int):
         delay = min(RECONNECT_DELAY * (2 ** attempt), RECONNECT_MAX_DELAY)
-        logger.warning(f"Reintentando conexion en {delay}s...")
+        logger.info(f"Reintentando conexion en {delay}s...")
         time.sleep(delay)
 
     def _handle_sigterm(self, *_):
@@ -130,7 +130,7 @@ class WorkerBase:
             routing_field = os.environ.get("ROUTING_FIELD")
             if routing_field and routing_field in msg:
                 val = str(msg[routing_field]).encode()
-                return str(int(hashlib.md5(val).hexdigest(), 16) % self.output_shards)
+                return str(zlib.crc32(val) % self.output_shards)
             else:
                 return str(random.randint(0, self.output_shards - 1))
         return "__queue__"
@@ -159,7 +159,7 @@ class WorkerBase:
         rows = self._buffer.pop(buf_key, [])
         if not rows:
             return
-        body = json.dumps({"rows": rows}).encode()
+        body = serialize({"rows": rows})
         try:
             if self.output_exchange and self.output_shards >= 1:
                 self._producer.send_to_shard(body, int(buf_key))
@@ -184,7 +184,7 @@ class WorkerBase:
         eof_msg = {"type": "eof"}
         if client_id is not None:
             eof_msg["client_id"] = client_id
-        eof_body = json.dumps(eof_msg).encode()
+        eof_body = serialize(eof_msg)
         try:
             if self.output_exchange and self.output_shards >= 1:
                 self._producer.send_eof_to_all(eof_body)
@@ -206,11 +206,34 @@ class WorkerBase:
         eof_count = [0]
         eof_per_client = {}
         done_clients = set()
+        checkpoint_counts = {}
 
         def on_message(body: bytes, ack, nack):
             try:
-                msg = json.loads(body)
-                if msg.get("type") == "eof":
+                #t0 = time.perf_counter()
+                msg = deserialize(body)
+                #t_deser = time.perf_counter() - t0
+                if msg.get("type") == "checkpoint":
+                    client_id = msg.get("client_id")
+                    checkpoint_id = msg.get("checkpoint_id")
+                    chk_key = (client_id, checkpoint_id)
+                    checkpoint_counts[chk_key] = checkpoint_counts.get(chk_key, 0) + 1
+                    if checkpoint_counts[chk_key] >= self.n_upstream:
+                        self._flush_all()
+                        checkpoint_body = serialize({
+                            "type": "checkpoint",
+                            "client_id": client_id,
+                            "checkpoint_id": checkpoint_id
+                        })
+                        if self.output_exchange and self.output_shards >= 1:
+                            self._producer.send_eof_to_all(checkpoint_body)
+                        elif self._producer:
+                            self._producer.send(checkpoint_body)
+                        del checkpoint_counts[chk_key]
+                    ack()
+                    return
+                elif msg.get("type") == "eof":
+                    #t0_eof = time.perf_counter()
                     client_id = msg.get("client_id")
                     if client_id is None:
                         eof_count[0] += 1
@@ -234,20 +257,36 @@ class WorkerBase:
                         f"({eof_per_client[client_id]}/{self.n_upstream})"
                     )
                     if eof_per_client[client_id] >= self.n_upstream and client_id not in done_clients:
+                        #t1 = time.perf_counter()
                         for result in self.on_eof(client_id):
                             self._emit([result])
+                        #t_eof_logic = time.perf_counter() - t1
+                        #t2 = time.perf_counter()
                         self._flush_all()
                         self._send_eof(client_id)
+                        #t_eof_network = time.perf_counter() - t2
                         done_clients.add(client_id)
+                        #logger.info(f"EOF Total: {(time.perf_counter() - t0_eof):.4f}s | Lógica (on_eof): {t_eof_logic:.4f}s | Vaciado/Red: {t_eof_network:.4f}s")
 
                     if self.total_clients > 0 and len(done_clients) >= self.total_clients:
                         self._consumer.stop_consuming()
                         logger.info(f"{self.__class__.__name__} terminado")
                     ack()
                     return
+                #t_process = 0.0
+                #t_emit = 0.0
                 for row in msg.get("rows", []):
-                    self._emit(self.process(row))
+                    #t1 = time.perf_counter()
+                    processed_data = self.process(row)
+                    #t2 = time.perf_counter()
+                    
+                    self._emit(processed_data)
+                    #t3 = time.perf_counter()
+                    
+                    #t_process += (t2 - t1)
+                    #t_emit += (t3 - t2)
                 ack()
+                #logger.info(f"Tiempos -> Deserializar: {t_deser:.4f}s | Process: {t_process:.4f}s | Emit/Red: {t_emit:.4f}s")
             except Exception as e:
                 logger.error(f"Error procesando mensaje: {e}")
                 nack()
@@ -256,8 +295,16 @@ class WorkerBase:
         while self._running:
             try:
                 self._consumer.start_consuming(on_message)
+                if self._running:
+                    logger.info("El consumo finalizo inesperadamente; reconectando")
+                    self._close_resources()
+                    _wait_for_rabbitmq()
+                    self._reconnect_backoff(attempt)
+                    self._setup_connections()
+                    attempt += 1
+                    continue
                 break
-            except MessageMiddlewareDisconnectedError:
+            except (MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError):
                 if not self._running:
                     break
                 logger.error("Conexion perdida con RabbitMQ")
