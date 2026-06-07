@@ -24,6 +24,8 @@ import random
 import signal
 import time
 import zlib
+import hashlib
+import json
 
 from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ, _connection_parameters
 from common.middleware.middleware_sharded import ShardedExchangeConsumer, ShardedExchangeProducer
@@ -67,6 +69,14 @@ class WorkerBase(HealthCheckServer):
 
         self._buffer: dict = {}
         self._running = True
+
+        self._processed_msgs_file = f"/tmp/processed_msgs_{self.consumer_group}_{self.shard_id}.txt"
+        self._processed_msgs = set()
+        if os.path.exists(self._processed_msgs_file):
+            with open(self._processed_msgs_file, "r") as f:
+                for line in f:
+                    self._processed_msgs.add(line.strip())
+        self._processed_file_handle = open(self._processed_msgs_file, "a")
 
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
@@ -121,6 +131,56 @@ class WorkerBase(HealthCheckServer):
         except Exception:
             pass
 
+    def _producer_is_open(self):
+        if self._producer is None:
+            return False
+        conn = getattr(self._producer, "connection", None)
+        if conn is None:
+            return True
+        return getattr(conn, "is_open", False)
+
+    def _ensure_producer(self):
+        if self._producer is None:
+            return
+        if not self._producer_is_open():
+            try:
+                self._producer.close()
+            except Exception:
+                pass
+            if self.output_exchange and self.output_shards >= 1:
+                self._producer = ShardedExchangeProducer(RABBITMQ_HOST, self.output_exchange, self.output_shards)
+            elif self.output_queue:
+                self._producer = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, self.output_queue)
+
+    def _send_checkpoint(self, client_id, checkpoint_id):
+        if self._producer is None:
+            return
+        checkpoint_body = serialize({
+            "type": "checkpoint",
+            "client_id": client_id,
+            "checkpoint_id": checkpoint_id
+        })
+        self._ensure_producer()
+        try:
+            if self.output_exchange and self.output_shards >= 1:
+                self._producer.send_eof_to_all(checkpoint_body)
+            else:
+                self._producer.send(checkpoint_body)
+        except (MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError):
+            try:
+                self._producer.close()
+            except Exception:
+                pass
+            if self.output_exchange and self.output_shards >= 1:
+                self._producer = ShardedExchangeProducer(RABBITMQ_HOST, self.output_exchange, self.output_shards)
+            elif self.output_queue:
+                self._producer = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, self.output_queue)
+            
+            if self.output_exchange and self.output_shards >= 1:
+                self._producer.send_eof_to_all(checkpoint_body)
+            else:
+                self._producer.send(checkpoint_body)
+
     def _reconnect_backoff(self, attempt: int):
         delay = min(RECONNECT_DELAY * (2 ** attempt), RECONNECT_MAX_DELAY)
         logger.warning(f"Reintentando conexion en {delay}s...")
@@ -150,7 +210,9 @@ class WorkerBase(HealthCheckServer):
                 val = str(msg[routing_field]).encode()
                 return str(zlib.crc32(val) % self.output_shards)
             else:
-                return str(random.randint(0, self.output_shards - 1))
+                # FIX: Enrutamiento determinístico basado en el contenido para tolerancia a fallos
+                val = json.dumps(msg, sort_keys=True).encode()
+                return str(zlib.crc32(val) % self.output_shards)
         return "__queue__"
 
     def _buffer_key(self, msg: dict) -> str:
@@ -178,15 +240,22 @@ class WorkerBase(HealthCheckServer):
         if not rows:
             return
         body = serialize({"rows": rows})
+        self._ensure_producer()
         try:
             if self.output_exchange and self.output_shards >= 1:
                 self._producer.send_to_shard(body, int(buf_key))
             else:
                 self._producer.send(body)
         except (MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError):
-            self._close_resources()
-            _wait_for_rabbitmq()
-            self._setup_connections()
+            try:
+                self._producer.close()
+            except Exception:
+                pass
+            if self.output_exchange and self.output_shards >= 1:
+                self._producer = ShardedExchangeProducer(RABBITMQ_HOST, self.output_exchange, self.output_shards)
+            elif self.output_queue:
+                self._producer = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, self.output_queue)
+            
             if self.output_exchange and self.output_shards >= 1:
                 self._producer.send_to_shard(body, int(buf_key))
             else:
@@ -203,20 +272,26 @@ class WorkerBase(HealthCheckServer):
         if client_id is not None:
             eof_msg["client_id"] = client_id
         eof_body = serialize(eof_msg)
+        self._ensure_producer()
         try:
             if self.output_exchange and self.output_shards >= 1:
                 self._producer.send_eof_to_all(eof_body)
             else:
                 self._producer.send(eof_body)
         except (MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError):
-            self._close_resources()
-            _wait_for_rabbitmq()
-            self._setup_connections()
+            try:
+                self._producer.close()
+            except Exception:
+                pass
+            if self.output_exchange and self.output_shards >= 1:
+                self._producer = ShardedExchangeProducer(RABBITMQ_HOST, self.output_exchange, self.output_shards)
+            elif self.output_queue:
+                self._producer = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, self.output_queue)
+            
             if self.output_exchange and self.output_shards >= 1:
                 self._producer.send_eof_to_all(eof_body)
             else:
                 self._producer.send(eof_body)
-
     # --- Loop principal ---------------------------------------------------------
 
     def run(self):
@@ -225,48 +300,56 @@ class WorkerBase(HealthCheckServer):
         eof_per_client = {}
         done_clients = set()
         checkpoint_counts = {}
+        
+        # Diccionarios para guardar las funciones ACK hasta cumplir la condición
+        checkpoint_acks = {}
+        eof_acks_per_client = {}
 
         def on_message(body: bytes, ack, nack):
             try:
+                msg_hash = hashlib.md5(body).hexdigest()
+                if msg_hash in self._processed_msgs:
+                    logger.warning(f"DUPLICADO IGNORADO ({msg_hash}) en {self.__class__.__name__}. Haciendo ack silencioso.")
+                    ack()
+                    return
                 t0 = time.perf_counter()
                 msg = deserialize(body)
                 t_deser = time.perf_counter() - t0
+                
                 if msg.get("type") == "checkpoint":
                     client_id = msg.get("client_id")
                     checkpoint_id = msg.get("checkpoint_id")
                     chk_key = (client_id, checkpoint_id)
+                    
+                    checkpoint_acks.setdefault(chk_key, []).append(ack) # Diferir ACK
                     checkpoint_counts[chk_key] = checkpoint_counts.get(chk_key, 0) + 1
+                    
                     if checkpoint_counts[chk_key] >= self.n_upstream:
                         self._flush_all()
-                        checkpoint_body = serialize({
-                            "type": "checkpoint",
-                            "client_id": client_id,
-                            "checkpoint_id": checkpoint_id
-                        })
-                        if self.output_exchange and self.output_shards >= 1:
-                            self._producer.send_eof_to_all(checkpoint_body)
-                        elif self._producer:
-                            self._producer.send(checkpoint_body)
+                        self._send_checkpoint(client_id, checkpoint_id)
+                        
+                        # Confirmar todos los ACKs juntos
+                        for pending_ack in checkpoint_acks[chk_key]:
+                            pending_ack()
+                        del checkpoint_acks[chk_key]
                         del checkpoint_counts[chk_key]
-                    ack()
                     return
+                
                 elif msg.get("type") == "cleanup":
                     client_id = msg.get("client_id")
-                    # Limpiar cualquier estado residual de ese cliente
                     self._buffer.pop(f"client:{client_id}", None)
                     if hasattr(self, "_state"):
                         self._state.pop(client_id, None)
                     ack()
                     return
+                    
                 elif msg.get("type") == "eof":
                     t0_eof = time.perf_counter()
                     client_id = msg.get("client_id")
                     if client_id is None:
                         eof_count[0] += 1
-                        logger.info(
-                            f"{self.__class__.__name__} EOF recibido "
-                            f"({eof_count[0]}/{self.n_upstream})"
-                        )
+                        logger.info(f"{self.__class__.__name__} EOF recibido ({eof_count[0]}/{self.n_upstream})")
+                        ack()
                         if eof_count[0] >= self.n_upstream:
                             for result in self.on_eof(None):
                                 self._emit([result])
@@ -274,43 +357,61 @@ class WorkerBase(HealthCheckServer):
                             self._send_eof()
                             self._consumer.stop_consuming()
                             logger.info(f"{self.__class__.__name__} terminado")
-                        ack()
                         return
 
+                    eof_acks_per_client.setdefault(client_id, []).append(ack) # Diferir ACK
                     eof_per_client[client_id] = eof_per_client.get(client_id, 0) + 1
-                    logger.info(
-                        f"{self.__class__.__name__} EOF recibido para client_id={client_id} "
-                        f"({eof_per_client[client_id]}/{self.n_upstream})"
-                    )
+                    logger.info(f"{self.__class__.__name__} EOF recibido para client_id={client_id} ({eof_per_client[client_id]}/{self.n_upstream})")
+                    
                     if eof_per_client[client_id] >= self.n_upstream and client_id not in done_clients:
                         t1 = time.perf_counter()
-                        for result in self.on_eof(client_id):
+                        for i, result in enumerate(self.on_eof(client_id)):
                             self._emit([result])
+                            if i % 100 == 0:
+                                self._consumer.process_events()
+                                if self._producer:
+                                    self._producer.process_events()
                         t_eof_logic = time.perf_counter() - t1
                         t2 = time.perf_counter()
                         self._flush_all()
                         self._send_eof(client_id)
                         t_eof_network = time.perf_counter() - t2
                         done_clients.add(client_id)
-                        logger.info(f"EOF Total: {(time.perf_counter() - t0_eof):.4f}s | Lógica (on_eof): {t_eof_logic:.4f}s | Vaciado/Red: {t_eof_network:.4f}s")
+                        logger.info(f"EOF Total: {(time.perf_counter() - t0_eof):.4f}s | Lógica: {t_eof_logic:.4f}s | Red: {t_eof_network:.4f}s")
+                        
+                        # Confirmar todos los ACKs juntos
+                        for pending_ack in eof_acks_per_client[client_id]:
+                            pending_ack()
+                        eof_acks_per_client[client_id] = []
 
                     if self.total_clients > 0 and len(done_clients) >= self.total_clients:
                         self._consumer.stop_consuming()
                         logger.info(f"{self.__class__.__name__} terminado")
-                    ack()
                     return
+                
                 t_process = 0.0
                 t_emit = 0.0
-                for row in msg.get("rows", []):
+                for i, row in enumerate(msg.get("rows", [])):
                     t1 = time.perf_counter()
                     processed_data = self.process(row)
                     t2 = time.perf_counter()
-                    
                     self._emit(processed_data)
                     t3 = time.perf_counter()
-                    
                     t_process += (t2 - t1)
                     t_emit += (t3 - t2)
+
+                    if i % 100 == 0:
+                        self._consumer.process_events()
+                        if self._producer:
+                            self._producer.process_events()
+                
+                
+                self._flush_all() 
+                self._processed_msgs.add(msg_hash)
+                self._processed_file_handle.write(msg_hash + "\n")
+                self._processed_file_handle.flush()
+                os.fsync(self._processed_file_handle.fileno()) # Fuerza la escritura a disco
+                # ------------------------------------------------
                 ack()
                 logger.info(f"Tiempos -> Deserializar: {t_deser:.4f}s | Process: {t_process:.4f}s | Emit/Red: {t_emit:.4f}s")
             except Exception as e:

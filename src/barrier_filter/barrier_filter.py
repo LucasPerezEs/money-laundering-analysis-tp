@@ -147,8 +147,17 @@ class BarrierFilter(WorkerBaseDoubleIO):
 
         sent_transactions = 0
         scanned_transactions = 0
+        seen = set() # FIX: Set para deduplicación local
+        
         for transaction in self._iter_transactions_from_path(snapshot_path):
             scanned_transactions += 1
+            
+            # FIX: Deduplicar filas idénticas producto de appends fallidos
+            t_tuple = tuple(sorted(transaction.items()))
+            if t_tuple in seen:
+                continue
+            seen.add(t_tuple)
+            
             result = self._filter_transaction(client_id, transaction, comparison_values)
             if result is not None:
                 sent_transactions += 1
@@ -157,7 +166,7 @@ class BarrierFilter(WorkerBaseDoubleIO):
         self._delete_path(snapshot_path)
         logging.info(f"Se leyeron {scanned_transactions} transacciones desde spool.")
         logging.info(f"Se enviaron {sent_transactions} transacciones desde spool.")
-
+    
     def on_both_eof_received(self, client_id=None):
         logging.info(f"Ambos EOF recibidos de cliente {client_id}")
         self._thresholds_ready_by_client.pop(client_id, None)

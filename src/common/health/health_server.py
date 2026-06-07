@@ -28,11 +28,21 @@ class HealthCheckServer:
             while True:
                 try:
                     conn, _ = srv.accept()
-                    conn.sendall(b"OK\n")
-                    conn.close()
                 except socket.timeout:
                     continue
                 except OSError:
-                    break
+                    # Sale solo si el socket base del servidor muere
+                    break 
+
+                try:
+                    conn.sendall(b"OK\n")
+                except OSError:
+                    # Ignora errores de red (ej: BrokenPipeError) si el monitor desconecta antes
+                    pass 
+                finally:
+                    try:
+                        conn.close()
+                    except OSError:
+                        pass
         finally:
             srv.close()

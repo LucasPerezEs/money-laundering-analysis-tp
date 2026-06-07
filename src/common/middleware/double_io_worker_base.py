@@ -211,7 +211,12 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 if routing_field and routing_field in msg:
                     val = str(msg[routing_field]).encode()
                     return str(int(hashlib.md5(val).hexdigest(), 16) % output_shards)
-            return str(random.randint(0, output_shards - 1))
+            
+            # FIX: Enrutamiento determinístico para garantizar idempotencia
+            if isinstance(msg, dict):
+                val = json.dumps(msg, sort_keys=True).encode()
+                return str(int(hashlib.md5(val).hexdigest(), 16) % output_shards)
+            return str(0) # Fallback seguro
         if isinstance(msg, dict):
             client_id = msg.get("client_id")
             if client_id is not None:
@@ -372,7 +377,6 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 for result in self.on_main_input_eof(client_id):
                     self._emit_results_main_stage([result])
                 self._flush_all_next_stage()
-                # Propagate EOF to main output so downstream (e.g., API client) can finish.
                 self._send_main_output_eof(client_id)
         else: #For joiner, check if joiner action is necessary
             with self._eof_lock:
@@ -382,6 +386,11 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 main_ready = self._clients_eof_main_input.get(client_id, 0) >= self.main_n_upstream
                 sec_ready = self._clients_eof_sec_input.get(client_id, 0) >= self.sec_n_upstream
                 
+                # NUEVO: Vaciar el buffer del proceso main incondicionalmente
+                if main_ready:
+                    self._flush_all_main_buffer()
+                    self._flush_all_sec_buffer()
+
                 if main_ready and sec_ready:
                     self._clients_joined[client_id] = True
                     
@@ -389,7 +398,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                         self._emit_main_output([result])
                     self._flush_all_main_buffer()
                     self._send_main_output_eof(client_id)
-
+   
     def _execute_eof_sec_input(self, client_id=None):
         if self._operation_mode == "PIPELINE":
             if self._clients_eof_sec_input[client_id] >= self.sec_n_upstream:
@@ -411,6 +420,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                     for result in self.on_secondary_ready(client_id):
                         self._emit_main_output([result])
                     self._flush_all_main_buffer()
+                    self._flush_all_sec_buffer() # NUEVO
                 
                 if main_ready and sec_ready:
                     self._clients_joined[client_id] = True
@@ -424,9 +434,15 @@ class WorkerBaseDoubleIO(HealthCheckServer):
 
     def handle_message_main_input(self):
         eof_count = [0]
+        chk_acks = {}
+        client_eof_acks = {}
 
         def on_message(body: bytes, ack, nack):
             try:
+                msg_hash = hashlib.md5(body).hexdigest()
+                if msg_hash in self._processed_msgs_main:
+                    ack()
+                    return
                 msg = deserialize(body)
                 if msg.get("type") == "checkpoint":
                     client_id = msg.get("client_id")
@@ -437,32 +453,36 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                         self._checkpoints_main[chk_key] = self._checkpoints_main.get(chk_key, 0) + 1
                         
                         if self._operation_mode == "PIPELINE":
+                            chk_acks.setdefault(chk_key, []).append(ack)
                             if self._checkpoints_main[chk_key] >= self.main_n_upstream:
                                 self._flush_all_main_buffer()
                                 self._send_main_checkpoint(client_id, chk_id)
+                                for a in chk_acks[chk_key]: a()
+                                del chk_acks[chk_key]
                                 del self._checkpoints_main[chk_key]
                         else: # JOINER
+                            ack()
                             main_count = self._checkpoints_main[chk_key]
                             sec_count = self._checkpoints_sec.get(chk_key, 0)
 
-                            if main_count >= self.main_n_upstream and sec_count >= self.sec_n_upstream:
+                            # NUEVO: Obligar al proceso main a liberar mensajes atrapados
+                            if main_count == self.main_n_upstream:
                                 self._flush_all_main_buffer()
+                                self._flush_all_sec_buffer()
+
+                            if main_count >= self.main_n_upstream and sec_count >= self.sec_n_upstream:
                                 self._send_main_checkpoint(client_id, chk_id)
                                 try:
                                     del self._checkpoints_main[chk_key]
                                     del self._checkpoints_sec[chk_key]
                                 except KeyError:
                                     pass
-                    ack()
                     return
                 elif msg.get("type") == "eof":
                     client_id = msg.get("client_id")
                     if client_id is None:
                         eof_count[0] += 1
-                        logger.info(
-                            f"{self.__class__.__name__} EOF main recibido "
-                            f"({eof_count[0]}/{self.main_n_upstream})"
-                        )
+                        logger.info(f"{self.__class__.__name__} EOF main recibido ({eof_count[0]}/{self.main_n_upstream})")
                         ack()
                         if eof_count[0] >= self.main_n_upstream:
                             self._execute_eof_main_input(None)
@@ -471,12 +491,17 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                         return
 
                     self._clients_eof_main_input[client_id] = self._clients_eof_main_input.get(client_id, 0) + 1
-                    logger.info(
-                        f"{self.__class__.__name__} EOF main recibido para client_id={client_id} "
-                        f"({self._clients_eof_main_input[client_id]}/{self.main_n_upstream})"
-                    )
-                    self._execute_eof_main_input(client_id)
-                    ack()
+                    logger.info(f"{self.__class__.__name__} EOF main recibido para client_id={client_id} ({self._clients_eof_main_input[client_id]}/{self.main_n_upstream})")
+                    
+                    if self._operation_mode == "PIPELINE":
+                        client_eof_acks.setdefault(client_id, []).append(ack)
+                        self._execute_eof_main_input(client_id)
+                        if self._clients_eof_main_input[client_id] >= self.main_n_upstream:
+                            for a in client_eof_acks[client_id]: a()
+                            client_eof_acks[client_id] = []
+                    else:
+                        self._execute_eof_main_input(client_id)
+                        ack()
                     return
 
                 else:
@@ -487,6 +512,14 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                             results, _ = self.process_main_input(row)
                             self._emit_main_output(results)
                     self.on_main_batch_complete()
+                    
+                    self._flush_all_next_stage() 
+                    self._processed_msgs_main.add(msg_hash)
+                    self._processed_file_handle_main.write(msg_hash + "\n")
+                    self._processed_file_handle_main.flush()
+                    os.fsync(self._processed_file_handle_main.fileno())
+                    
+                    # -------------------
                     ack()
             except Exception as e:
                 logger.error(f"Error procesando mensaje: {e}")
@@ -512,9 +545,122 @@ class WorkerBaseDoubleIO(HealthCheckServer):
 
     def handle_message_sec_input(self):
         eof_count = [0]
+        chk_acks = {}
+        client_eof_acks = {}
 
         def on_message(body: bytes, ack, nack):
             try:
+                msg_hash = hashlib.md5(body).hexdigest()
+                if msg_hash in self._processed_msgs_sec:
+                    ack()
+                    return
+                msg = deserialize(body)
+                if msg.get("type") == "checkpoint":
+                    client_id = msg.get("client_id")
+                    chk_id = msg.get("checkpoint_id")
+                    chk_key = f"{client_id}_{chk_id}"
+                    
+                    with self._eof_lock:
+                        self._checkpoints_sec[chk_key] = self._checkpoints_sec.get(chk_key, 0) + 1
+                        
+                        if self._operation_mode == "PIPELINE":
+                            chk_acks.setdefault(chk_key, []).append(ack)
+                            if self._checkpoints_sec[chk_key] >= self.sec_n_upstream:
+                                self._flush_all_sec_buffer()
+                                self._send_sec_checkpoint(client_id, chk_id)
+                                for a in chk_acks[chk_key]: a()
+                                del chk_acks[chk_key]
+                                del self._checkpoints_sec[chk_key]
+                        else: # JOINER
+                            main_count = self._checkpoints_main.get(chk_key, 0)
+                            sec_count = self._checkpoints_sec[chk_key]
+                            
+                            # NUEVO: Obligar al proceso secundario a liberar mensajes
+                            if sec_count == self.sec_n_upstream:
+                                self._flush_all_main_buffer()
+                                self._flush_all_sec_buffer()
+
+                            if main_count >= self.main_n_upstream and sec_count >= self.sec_n_upstream:
+                                self._send_main_checkpoint(client_id, chk_id)
+                                try:
+                                    del self._checkpoints_main[chk_key]
+                                    del self._checkpoints_sec[chk_key]
+                                except KeyError:
+                                    pass
+                    return
+                elif msg.get("type") == "eof":
+                    client_id = msg.get("client_id")
+                    if client_id is None:
+                        eof_count[0] += 1
+                        logger.info(f"{self.__class__.__name__} EOF secondary recibido ({eof_count[0]}/{self.sec_n_upstream})")
+                        ack()
+                        if eof_count[0] >= self.sec_n_upstream:
+                            self._execute_eof_sec_input(None)
+                            self._sec_consumer.stop_consuming()
+                            logger.info(f"{self.__class__.__name__} terminado")
+                        return
+
+                    self._clients_eof_sec_input[client_id] = self._clients_eof_sec_input.get(client_id, 0) + 1
+                    logger.info(f"{self.__class__.__name__} EOF secondary recibido para client_id={client_id} ({self._clients_eof_sec_input[client_id]}/{self.sec_n_upstream})")
+                    
+                    if self._operation_mode == "PIPELINE":
+                        client_eof_acks.setdefault(client_id, []).append(ack)
+                        self._execute_eof_sec_input(client_id)
+                        if self._clients_eof_sec_input[client_id] >= self.sec_n_upstream:
+                            for a in client_eof_acks[client_id]: a()
+                            client_eof_acks[client_id] = []
+                    else:
+                        self._execute_eof_sec_input(client_id)
+                        ack()
+                    return
+
+                else:
+                    for row in msg.get("rows", []):
+                        if self._operation_mode == "PIPELINE":
+                            self._emit_sec_output(self.process_secondary_input(row)[1])
+                        else:
+                            self.process_secondary_input(row)
+                    self.on_sec_batch_complete()
+                    
+                    
+                    self._flush_all_next_stage() 
+                    self._processed_msgs_sec.add(msg_hash)
+                    self._processed_file_handle_sec.write(msg_hash + "\n")
+                    self._processed_file_handle_sec.flush()
+                    os.fsync(self._processed_file_handle_sec.fileno())
+                    # -------------------
+                    ack()
+            except Exception as e:
+                logger.error(f"Error procesando mensaje: {e}")
+                nack()
+
+        attempt = 0
+        while self._running:
+            try:
+                self._sec_consumer.start_consuming(on_message)
+                break
+            except MessageMiddlewareDisconnectedError:
+                if not self._running:
+                    break
+                logger.error("Conexion perdida con RabbitMQ")
+                self._close_sec_resources()
+                _wait_for_rabbitmq()
+                self._reconnect_backoff(attempt)
+                self._sec_consumer = self._create_sec_consumer()
+                attempt += 1
+            finally:
+                if not self._running:
+                    self._close_sec_resources()
+    
+    def handle_message_sec_input(self):
+        eof_count = [0]
+
+        def on_message(body: bytes, ack, nack):
+            try:
+                msg_hash = hashlib.md5(body).hexdigest()
+                if msg_hash in self._processed_msgs_sec:
+                    ack()
+                    return
                 msg = deserialize(body)
                 if msg.get("type") == "checkpoint":
                     client_id = msg.get("client_id")
@@ -575,6 +721,14 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                         else:
                             self.process_secondary_input(row)
                     self.on_sec_batch_complete()
+                    
+                    
+                    self._flush_all_next_stage() 
+                    self._processed_msgs_sec.add(msg_hash)
+                    self._processed_file_handle_sec.write(msg_hash + "\n")
+                    self._processed_file_handle_sec.flush()
+                    os.fsync(self._processed_file_handle_sec.fileno())
+                    # -------------------
                     ack()
             except Exception as e:
                 logger.error(f"Error procesando mensaje: {e}")
@@ -682,6 +836,14 @@ class WorkerBaseDoubleIO(HealthCheckServer):
         # SIGTERM handler
         signal.signal(signal.SIGTERM, self._handle_main_process_sigterm)
 
+        self._processed_msgs_file_main = f"/tmp/processed_main_{self.consumer_group}_{self.shard_id}.txt"
+        self._processed_msgs_main = set()
+        if os.path.exists(self._processed_msgs_file_main):
+            with open(self._processed_msgs_file_main, "r") as f:
+                for line in f:
+                    self._processed_msgs_main.add(line.strip())
+        self._processed_file_handle_main = open(self._processed_msgs_file_main, "a")
+
         # Handle inputs
         self.handle_message_main_input()
 
@@ -750,6 +912,13 @@ class WorkerBaseDoubleIO(HealthCheckServer):
 
         # SIGTERM handler
         signal.signal(signal.SIGTERM, self._handle_sec_process_sigterm)
+        self._processed_msgs_file_sec = f"/tmp/processed_sec_{self.consumer_group}_{self.shard_id}.txt"
+        self._processed_msgs_sec = set()
+        if os.path.exists(self._processed_msgs_file_sec):
+            with open(self._processed_msgs_file_sec, "r") as f:
+                for line in f:
+                    self._processed_msgs_sec.add(line.strip())
+        self._processed_file_handle_sec = open(self._processed_msgs_file_sec, "a")
 
         # Handle inputs
         self.handle_message_sec_input()

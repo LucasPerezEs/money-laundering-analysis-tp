@@ -50,6 +50,9 @@ class MessageMiddleware(ABC):
     @abstractmethod
     def close(self):
         pass
+    @abstractmethod
+    def process_events(self):
+        pass
 
 
 class MessageMiddlewareExchange(MessageMiddleware):

@@ -357,9 +357,19 @@ def generate_system_docker_compose(total_clients=0):
             sec_n_upstream=q5_money_converter_api_client_instances,
         )
         for name, config in q5_money_converters.items():
-            config["environment"].append("BATCH_SIZE=1")
-            config["environment"].append("SEC_BATCH_SIZE=5000")
-            config["environment"].append(f"SECONDARY_OUTPUT_SHARDS={q5_filter_lt_1_usd_instances}")
+            config.pop("container_name", None)
+            shard_id = int(name.rsplit("_", 1)[-1])
+            config["environment"] = [
+                "HEALTH_PORT=8888",
+                "RABBITMQ_HOST=rabbitmq",
+                "TARGET_CURRENCY=US Dollar",
+                "INPUT_EXCHANGE=q5_converter_to_usd_exc",
+                "CONSUMER_GROUP=q5_money_converter",
+                f"SHARD_ID={shard_id}",
+                "N_UPSTREAM=3",
+                "OUTPUT_EXCHANGE=q5_converted_amounts_exc",
+                "OUTPUT_SHARDS=3",
+            ]
         system = system | q5_money_converters
 
         q5_money_converters_api_client = get_money_conversion_api_client_docker_services(
@@ -369,6 +379,8 @@ def generate_system_docker_compose(total_clients=0):
             output_shards=q5_money_converters_instances,
             n_upstream=q5_money_converters_instances,
         )
+        for config in q5_money_converters_api_client.values():
+            config.pop("container_name", None)
         system = system | q5_money_converters_api_client
 
         # Filter of less than 1 USD

@@ -60,6 +60,13 @@ class ShardedExchangeProducer:
         for i in range(self.n_shards):
             self.send_to_shard(eof_body, i)
 
+    def process_events(self):
+        if hasattr(self, 'connection') and self.connection.is_open:
+            try:
+                self.connection.process_data_events(time_limit=0)
+            except Exception:
+                pass
+
     def close(self):
         try:
             if self.connection.is_open:
@@ -94,3 +101,6 @@ class ShardedExchangeConsumer:
 
     def close(self):
         self._inner.close()
+    
+    def process_events(self):
+        self._inner.process_events()
