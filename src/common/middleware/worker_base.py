@@ -210,9 +210,9 @@ class WorkerBase:
 
         def on_message(body: bytes, ack, nack):
             try:
-                t0 = time.perf_counter()
+                #t0 = time.perf_counter()
                 msg = deserialize(body)
-                t_deser = time.perf_counter() - t0
+                #t_deser = time.perf_counter() - t0
                 if msg.get("type") == "checkpoint":
                     client_id = msg.get("client_id")
                     checkpoint_id = msg.get("checkpoint_id")
@@ -233,7 +233,7 @@ class WorkerBase:
                     ack()
                     return
                 elif msg.get("type") == "eof":
-                    t0_eof = time.perf_counter()
+                    #t0_eof = time.perf_counter()
                     client_id = msg.get("client_id")
                     if client_id is None:
                         eof_count[0] += 1
@@ -257,36 +257,36 @@ class WorkerBase:
                         f"({eof_per_client[client_id]}/{self.n_upstream})"
                     )
                     if eof_per_client[client_id] >= self.n_upstream and client_id not in done_clients:
-                        t1 = time.perf_counter()
+                        #t1 = time.perf_counter()
                         for result in self.on_eof(client_id):
                             self._emit([result])
-                        t_eof_logic = time.perf_counter() - t1
-                        t2 = time.perf_counter()
+                        #t_eof_logic = time.perf_counter() - t1
+                        #t2 = time.perf_counter()
                         self._flush_all()
                         self._send_eof(client_id)
-                        t_eof_network = time.perf_counter() - t2
+                        #t_eof_network = time.perf_counter() - t2
                         done_clients.add(client_id)
-                        logger.info(f"EOF Total: {(time.perf_counter() - t0_eof):.4f}s | Lógica (on_eof): {t_eof_logic:.4f}s | Vaciado/Red: {t_eof_network:.4f}s")
+                        #logger.info(f"EOF Total: {(time.perf_counter() - t0_eof):.4f}s | Lógica (on_eof): {t_eof_logic:.4f}s | Vaciado/Red: {t_eof_network:.4f}s")
 
                     if self.total_clients > 0 and len(done_clients) >= self.total_clients:
                         self._consumer.stop_consuming()
                         logger.info(f"{self.__class__.__name__} terminado")
                     ack()
                     return
-                t_process = 0.0
-                t_emit = 0.0
+                #t_process = 0.0
+                #t_emit = 0.0
                 for row in msg.get("rows", []):
-                    t1 = time.perf_counter()
+                    #t1 = time.perf_counter()
                     processed_data = self.process(row)
-                    t2 = time.perf_counter()
+                    #t2 = time.perf_counter()
                     
                     self._emit(processed_data)
-                    t3 = time.perf_counter()
+                    #t3 = time.perf_counter()
                     
-                    t_process += (t2 - t1)
-                    t_emit += (t3 - t2)
+                    #t_process += (t2 - t1)
+                    #t_emit += (t3 - t2)
                 ack()
-                logger.info(f"Tiempos -> Deserializar: {t_deser:.4f}s | Process: {t_process:.4f}s | Emit/Red: {t_emit:.4f}s")
+                #logger.info(f"Tiempos -> Deserializar: {t_deser:.4f}s | Process: {t_process:.4f}s | Emit/Red: {t_emit:.4f}s")
             except Exception as e:
                 logger.error(f"Error procesando mensaje: {e}")
                 nack()

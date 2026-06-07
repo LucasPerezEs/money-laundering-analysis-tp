@@ -13,8 +13,8 @@ services:
     - SERVER_HOST=gateway
     - SERVER_PORT=7659
     - BATCH_SIZE=5000
-    - TRANSACTIONS_FILE=/datasets/LI-Small_Trans.csv
-    - ACCOUNTS_FILE=/datasets/LI-Small_accounts.csv
+    - TRANSACTIONS_FILE=/datasets/LI-Medium_Trans.csv
+    - ACCOUNTS_FILE=/datasets/LI-Medium_accounts.csv
     - CLIENT_ID=0
     - RESULTS_DIR=/results
     - BATCH_SIZE=20000
@@ -38,7 +38,7 @@ services:
     - OUTPUT_EXCHANGE=gateway_exc
     - INPUT_QUEUE_PREFIX=results
     - TOTAL_QUERIES=5
-    - MAX_IN_FLIGHT_BATCHES=1000
+    - MAX_IN_FLIGHT_BATCHES=1200
     - OUTPUT_SHARDS=2
     - QUERY_1_N_UPSTREAM=2
     - QUERY_2_N_UPSTREAM=2
