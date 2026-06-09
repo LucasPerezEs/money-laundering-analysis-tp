@@ -193,10 +193,10 @@ def generate_system_docker_compose(total_clients=0):
         )
         system = system | data_reducers_q3
 
-        # Filter dates between 06/09/2022 and 15/09/2022 included
+        # El notebook compara strings con <= "2022/09/15", excluyendo timestamps del día 15.
         q3_filters_06092022_15092022 = get_filters_docker_services(
             q3_filter_06092022_15092022_prefix, q3_filter_06092022_15092022_instances,
-            filter_field="Timestamp", filter_op="in", filter_value='["2022/09/06", "2022/09/15"]',
+            filter_field="Timestamp", filter_op="in", filter_value='["2022/09/06", "2022/09/14"]',
             input_exchange="q3_reduced_data_exc",
             output_exchange="q3_transactions_exc",
             output_shards=q3_avg_and_transactions_joiner_instances,

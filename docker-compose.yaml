@@ -598,7 +598,7 @@ services:
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
-    - FILTER_VALUE=["2022/09/06", "2022/09/15"]
+    - FILTER_VALUE=["2022/09/06", "2022/09/14"]
     - ROUTING_FIELD=Payment Format
   q3_filter_06092022_15092022_1:
     build:
@@ -619,7 +619,7 @@ services:
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
-    - FILTER_VALUE=["2022/09/06", "2022/09/15"]
+    - FILTER_VALUE=["2022/09/06", "2022/09/14"]
     - ROUTING_FIELD=Payment Format
   q3_filter_06092022_15092022_2:
     build:
@@ -640,7 +640,7 @@ services:
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
-    - FILTER_VALUE=["2022/09/06", "2022/09/15"]
+    - FILTER_VALUE=["2022/09/06", "2022/09/14"]
     - ROUTING_FIELD=Payment Format
   q3_splitter_by_payment_method_0:
     build:

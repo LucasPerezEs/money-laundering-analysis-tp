@@ -182,7 +182,7 @@ def serial_q2(rows, accounts):
 def serial_q3(rows):
     usd = [r for r in rows if r["payment_currency"] == "US Dollar"]
     period_a = [r for r in usd if in_period(r["timestamp"], "2022-09-01", "2022-09-05")]
-    period_b = [r for r in usd if in_period(r["timestamp"], "2022-09-06", "2022-09-15")]
+    period_b = [r for r in usd if in_period(r["timestamp"], "2022-09-06", "2022-09-14")]
     acc = defaultdict(lambda: {"s": 0.0, "n": 0})
     for r in period_a:
         acc[r["payment_format"]]["s"] += r["amount"]
