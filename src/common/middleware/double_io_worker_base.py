@@ -661,7 +661,7 @@ class WorkerBaseDoubleIO:
 
         self.sec_output_queue    = os.environ.get("SECONDARY_OUTPUT_QUEUE", "")
         self.sec_output_exchange = os.environ.get("SECONDARY_OUTPUT_EXCHANGE", "")
-        self.sec_output_shards   = int(os.environ.get("SECONDARY_OUTPUT_SHARDS", "1"))
+        self.sec_output_shards   = int(os.environ.get("SEC_OUTPUT_SHARDS", os.environ.get("SECONDARY_OUTPUT_SHARDS", "1")))
         self._sec_out_buffer: dict = {}
 
         # Setup connections
@@ -730,7 +730,7 @@ class WorkerBaseDoubleIO:
         # Secondary output
         self.sec_output_queue    = os.environ.get("SECONDARY_OUTPUT_QUEUE", "")
         self.sec_output_exchange = os.environ.get("SECONDARY_OUTPUT_EXCHANGE", "")
-        self.sec_output_shards   = int(os.environ.get("SECONDARY_OUTPUT_SHARDS", "1"))
+        self.sec_output_shards   = int(os.environ.get("SEC_OUTPUT_SHARDS", os.environ.get("SECONDARY_OUTPUT_SHARDS", "1")))
         self._sec_out_buffer: dict = {}
 
         # Setup connections

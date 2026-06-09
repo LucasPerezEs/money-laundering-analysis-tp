@@ -84,7 +84,7 @@ class MoneyConverter(WorkerBaseDoubleIO):
                 logging.info("BTC rate no disponible para %s", day)
                 return ([], [])
             data_copy["Payment Currency"] = self._target_currency
-            data_copy["Amount Paid"] = float(data["Amount Paid"]) * rate
+            data_copy["Amount Paid"] = float(data["Amount Paid"]) / rate
             self._log_conversion(day, origin_code, target_code, data["Amount Paid"], rate, data_copy["Amount Paid"])
             return ([], [data_copy])
 
@@ -94,9 +94,6 @@ class MoneyConverter(WorkerBaseDoubleIO):
             data_copy["Amount Paid"] = float(data["Amount Paid"]) * rate
             self._log_conversion(day, origin_code, target_code, data["Amount Paid"], rate, data_copy["Amount Paid"])
             return ([], [data_copy])
-
-        if not hasattr(self, "_local_pending"):
-            self._local_pending = {}
 
         with self._shared_lock:
             if rate_key in self._shared_cache:
@@ -109,17 +106,10 @@ class MoneyConverter(WorkerBaseDoubleIO):
                 self._log_conversion(day, origin_code, target_code, data["Amount Paid"], rate, data_copy["Amount Paid"])
                 return ([], [data_copy])
             
-            else:
-                is_first_request = False
-                if rate_key not in self._shared_pending and rate_key not in self._local_pending:
-                    is_first_request = True
-
-                self._local_pending.setdefault(rate_key, []).append(data_copy)
-
-                if len(self._local_pending[rate_key]) >= 100:
-                    pending_list = self._shared_pending.get(rate_key, [])
-                    pending_list.extend(self._local_pending.pop(rate_key))
-                    self._shared_pending[rate_key] = pending_list
+            is_first_request = rate_key not in self._shared_pending
+            pending_list = self._shared_pending.get(rate_key, [])
+            pending_list.append(data_copy)
+            self._shared_pending[rate_key] = pending_list
 
         if is_first_request:
             req = self._generate_consult_currency_rate(day, origin_code, target_code)
@@ -152,28 +142,6 @@ class MoneyConverter(WorkerBaseDoubleIO):
 
         return ([], new_data_list)
 
-    def on_main_input_eof(self, client_id=None) -> list:
-        if hasattr(self, "_local_pending") and self._local_pending:
-            with self._shared_lock:
-                for rate_key, rows in self._local_pending.items():
-                    if rate_key in self._shared_cache:
-                        rate = self._shared_cache[rate_key]
-                        out_rows = []
-                        for row in rows:
-                            row["Payment Currency"] = self._target_currency
-                            row["Amount Paid"] = float(row["Amount Paid"]) * rate
-                            out_rows.append(row)
-                        self._emit_sec_output(out_rows)
-
-                    else:
-                        pending_list = self._shared_pending.get(rate_key, [])
-                        pending_list.extend(rows)
-                        self._shared_pending[rate_key] = pending_list
-
-            self._local_pending.clear()
-            
-        return []
-    
 if __name__ == "__main__":
     logger = logging.getLogger(__file__)
     logger.setLevel(logging.INFO)

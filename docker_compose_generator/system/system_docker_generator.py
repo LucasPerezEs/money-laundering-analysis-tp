@@ -375,11 +375,23 @@ def generate_system_docker_compose(total_clients=0):
             q5_filter_01092022_05092022_prefix, q5_filter_01092022_05092022_instances,
             filter_field="Timestamp", filter_op="in", filter_value='["2022/09/01", "2022/09/05"]',
             input_exchange="q5_reduced_exc",
-            output_exchange="q5_converter_to_usd_exc",
+            output_exchange="q5_payment_format_exc",
             n_upstream=q5_data_reducer_instances,
-            output_shards=q5_money_converters_instances,
+            output_shards=q5_payment_fmt_filters_instances,
         )
         system = system | q5_filters_01092022_05092022
+
+        # Filter by payment methods
+        q5_payment_fmt_filters = get_filters_docker_services(
+            q5_payment_fmt_filters_prefix, q5_payment_fmt_filters_instances,
+            filter_field="Payment Format", filter_op="in", filter_value='["Wire", "ACH"]',
+            input_exchange="q5_payment_format_exc",
+            output_exchange="q5_converter_to_usd_exc",
+            output_shards=q5_money_converters_instances,
+            n_upstream=q5_filter_01092022_05092022_instances,
+        )
+
+        system = system | q5_payment_fmt_filters
 
         # Conversion to USD
         q5_money_converters = get_money_converters_services(
@@ -388,13 +400,13 @@ def generate_system_docker_compose(total_clients=0):
             sec_input_exchange="q5_currency_rates_from_api_exc",
             main_output_queue="q5_reqs_currency_rates_api",
             sec_output_exchange="q5_converted_amounts_exc",
-            main_n_upstream=q5_filter_01092022_05092022_instances,
+            main_n_upstream=q5_payment_fmt_filters_instances,
             sec_n_upstream=q5_money_converter_api_client_instances,
+            sec_output_shards=q5_filter_lt_1_usd_instances,
         )
         for name, config in q5_money_converters.items():
             config["environment"].append("BATCH_SIZE=1")
             config["environment"].append("SEC_BATCH_SIZE=5000")
-            config["environment"].append(f"SECONDARY_OUTPUT_SHARDS={q5_filter_lt_1_usd_instances}")
         system = system | q5_money_converters
 
         q5_money_converters_api_client = get_money_conversion_api_client_docker_services(
@@ -412,31 +424,19 @@ def generate_system_docker_compose(total_clients=0):
             "Amount Paid", "1", "lt",
             input_exchange="q5_converted_amounts_exc",
             output_exchange="q5_small_amounts_exc",
-            output_shards=q5_payment_fmt_filters_instances,
+            output_shards=q5_counter_instances,
             n_upstream=q5_money_converters_instances,
         )
         
         system = system | q5_filters_lt_1_usd
 
-        # Filter by payment methods
-        q5_payment_fmt_filters = get_filters_docker_services(
-            q5_payment_fmt_filters_prefix, q5_payment_fmt_filters_instances,
-            filter_field="Payment Format", filter_op="in", filter_value='["Wire", "ACH"]',
-            input_exchange="q5_small_amounts_exc",
-            output_exchange="q5_countable_exc",
-            output_shards=q5_counter_instances,
-            n_upstream=q5_filter_lt_1_usd_instances,
-        )
-        
-        system = system | q5_payment_fmt_filters
-
         # Count transactions that arrive
         q5_counters = get_aggregator_docker_services(
             q5_counter_prefix, q5_counter_instances,
-            input_exchange="q5_countable_exc",
+            input_exchange="q5_small_amounts_exc",
             output_queue="q5_totals_reached",
             agg_op="count",
-            n_upstream=q5_payment_fmt_filters_instances,
+            n_upstream=q5_filter_lt_1_usd_instances,
         )
         system = system | q5_counters
 

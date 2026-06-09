@@ -89,7 +89,7 @@ def to_usd(amount, currency, timestamp):
     if code == "BTC":
         day = parse_date(timestamp).isoformat()
         rate = _get_btc_rate(day)
-        return amount * rate if rate else None
+        return amount / rate if rate else None
     day = parse_date(timestamp).isoformat()
     rate = get_rate(code, day)
     return amount * rate if rate else None
