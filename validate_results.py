@@ -133,7 +133,8 @@ def load_accounts(path):
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for r in reader:
-            mapping[r["Bank ID"]] = r["Bank Name"]
+            bank_id = str(r["Bank ID"]).strip().lstrip("0") or "0"
+            mapping[bank_id] = r["Bank Name"]
     print(f"  {len(mapping)} cuentas cargadas")
     return mapping
 
@@ -157,19 +158,26 @@ def serial_q2(rows, accounts):
     for r in rows:
         if r["payment_currency"] != "US Dollar":
             continue
-        raw_bank_id = r["from_bank"]
-        bank_id = str(raw_bank_id).strip()
-        normalized_bank_id = bank_id.lstrip("0") or "0"
-        bank_name = accounts.get(bank_id)
-        if bank_name is None:
-            bank_name = accounts.get(normalized_bank_id, raw_bank_id)
+        bank_id = str(r["from_bank"]).strip().lstrip("0") or "0"
         if bank_id not in best or r["amount"] > best[bank_id]["amount"]:
             best[bank_id] = {
-                "bank_name":    bank_name,
+                "from_bank":    bank_id,
                 "from_account": r["from_account"],
                 "amount":       r["amount"],
             }
-    return list(best.values())
+
+    results = []
+    for bank_id, row in best.items():
+        bank_name = accounts.get(bank_id)
+        if bank_name is None:
+            continue
+        results.append({
+            "from_bank": row["from_bank"],
+            "from_account": row["from_account"],
+            "bank_name": bank_name,
+            "amount": row["amount"],
+        })
+    return results
 
 def serial_q3(rows):
     usd = [r for r in rows if r["payment_currency"] == "US Dollar"]

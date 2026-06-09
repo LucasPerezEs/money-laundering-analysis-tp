@@ -294,6 +294,7 @@ services:
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
     - SHARD_KEY_FIELD=From Bank
+    - NORMALIZE_NUMERIC_KEY=true
     - TOTAL_CLIENTS=1
   q2_splitter_by_bank_1:
     build:
@@ -316,6 +317,7 @@ services:
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
     - SHARD_KEY_FIELD=From Bank
+    - NORMALIZE_NUMERIC_KEY=true
     - TOTAL_CLIENTS=1
   q2_splitter_by_bank_2:
     build:
@@ -338,6 +340,7 @@ services:
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
     - SHARD_KEY_FIELD=From Bank
+    - NORMALIZE_NUMERIC_KEY=true
     - TOTAL_CLIENTS=1
   q3_avg_aggregators_preceding_period_0:
     build:

@@ -137,6 +137,8 @@ def generate_system_docker_compose(total_clients=0):
             n_upstream=usd_instances,
             total_clients=total_clients,
         )
+        for config in q2_splitters.values():
+            config["environment"].append("NORMALIZE_NUMERIC_KEY=true")
         system = system | q2_splitters
 
         q2_data_reducers = get_data_reducer_docker_services(
