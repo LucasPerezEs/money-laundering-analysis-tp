@@ -10,6 +10,13 @@ def _normalize_bank_id(bank_id):
 
 class BankNameAdder(WorkerBaseDoubleIO):
 
+    def waits_for_both_pipeline_eofs(self) -> bool:
+        return True
+
+    def __init__(self):
+        super().__init__()
+        self.sec_batch_size = 1
+
     def process_main_input(self, data: dict) -> tuple[list, list]:
         bank_id = _normalize_bank_id(data.get("From Bank"))
 
@@ -26,8 +33,8 @@ class BankNameAdder(WorkerBaseDoubleIO):
                 return ([], [])
 
     def process_secondary_input(self, data: dict) -> tuple[list, list]:
-        bank_id = _normalize_bank_id(data.get("From Bank"))
-        bank_name = data.get("bank_name")
+        bank_id = _normalize_bank_id(data.get("bank_id", data.get("From Bank")))
+        bank_name = data.get("bank_name", data.get("Bank Name"))
 
         resolved_messages = []
 
@@ -42,17 +49,20 @@ class BankNameAdder(WorkerBaseDoubleIO):
                     msg["Bank Name"] = bank_name
                     resolved_messages.append(msg)
 
-        return ([], resolved_messages)
+            # Publicar antes de liberar el lock evita que EOF adelante filas resueltas.
+            self._emit_sec_output(resolved_messages)
+
+        return ([], [])
 
     def on_main_input_eof(self, client_id=None) -> list:
         unmatched = []
         with self._shared_lock:
             for bank_id, rows in self._shared_pending.items():
                 for row in rows:
-                    row["Bank Name"] = bank_id 
+                    row["Bank Name"] = bank_id
                     unmatched.append(row)
             self._shared_pending.clear()
-            
+
         if unmatched:
             self._emit_sec_output(unmatched)
 

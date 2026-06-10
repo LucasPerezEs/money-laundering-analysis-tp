@@ -32,6 +32,11 @@ def _chunks(items, size):
         yield chunk
 
 
+def _normalize_bank_id(bank_id):
+    normalized = str(bank_id).strip().lstrip("0")
+    return normalized or "0"
+
+
 from common.middleware.middleware_sharded import ShardedExchangeProducer
 
 def _build_output_queue(mom_host, output_queue, output_exchange, output_shards=1):
@@ -99,12 +104,13 @@ def handle_client_request(
     handler = message_handler.MessageHandler()
     client_id = None
     output_shards = int(os.environ.get("OUTPUT_SHARDS", "1"))
-    banks_output_shards = int(os.environ.get("BANKS_OUTPUT_SHARDS", "1"))
+    banks_output_shards = int(os.environ.get("BANK_OUTPUT_SHARDS", "1"))
 
     gateway_output_batch_size = int(os.environ.get("GATEWAY_OUTPUT_BATCH_SIZE", "2000"))
     max_in_flight_batches = int(os.environ.get("MAX_IN_FLIGHT_BATCHES", "3"))
     output = _build_output_queue(mom_host, output_queue, output_exchange, output_shards)
     banks_output = _build_banks_output(mom_host, banks_out_queue, banks_out_exchange, banks_output_shards)
+    sent_bank_ids = set()
 
     try:
         client_socket.setblocking(True)
@@ -148,7 +154,11 @@ def handle_client_request(
             if msg_type == message_protocol.external.MsgType.ACCOUNTS_BATCH:
                 account_dicts = []
                 for row in rows:
-                    account_dicts.append({"bank_name": row[0], "bank_id": str(row[1]).strip()})
+                    bank_id = _normalize_bank_id(row[1])
+                    if bank_id in sent_bank_ids:
+                        continue
+                    sent_bank_ids.add(bank_id)
+                    account_dicts.append({"bank_name": row[0], "bank_id": bank_id})
 
                 # Send bank names over to worker
                 for chunk in _chunks(account_dicts, gateway_output_batch_size):

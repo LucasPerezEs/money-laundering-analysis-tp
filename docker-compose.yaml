@@ -294,6 +294,7 @@ services:
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
     - SHARD_KEY_FIELD=From Bank
+    - NORMALIZE_NUMERIC_KEY=true
     - TOTAL_CLIENTS=1
   q2_splitter_by_bank_1:
     build:
@@ -316,6 +317,7 @@ services:
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
     - SHARD_KEY_FIELD=From Bank
+    - NORMALIZE_NUMERIC_KEY=true
     - TOTAL_CLIENTS=1
   q2_splitter_by_bank_2:
     build:
@@ -338,6 +340,7 @@ services:
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
     - SHARD_KEY_FIELD=From Bank
+    - NORMALIZE_NUMERIC_KEY=true
     - TOTAL_CLIENTS=1
   q3_avg_aggregators_preceding_period_0:
     build:
@@ -595,7 +598,7 @@ services:
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
-    - FILTER_VALUE=["2022/09/06", "2022/09/15"]
+    - FILTER_VALUE=["2022/09/06", "2022/09/14"]
     - ROUTING_FIELD=Payment Format
   q3_filter_06092022_15092022_1:
     build:
@@ -616,7 +619,7 @@ services:
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
-    - FILTER_VALUE=["2022/09/06", "2022/09/15"]
+    - FILTER_VALUE=["2022/09/06", "2022/09/14"]
     - ROUTING_FIELD=Payment Format
   q3_filter_06092022_15092022_2:
     build:
@@ -637,7 +640,7 @@ services:
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
-    - FILTER_VALUE=["2022/09/06", "2022/09/15"]
+    - FILTER_VALUE=["2022/09/06", "2022/09/14"]
     - ROUTING_FIELD=Payment Format
   q3_splitter_by_payment_method_0:
     build:
@@ -1211,7 +1214,7 @@ services:
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q5_countable_exc
+    - INPUT_EXCHANGE=q5_small_amounts_exc
     - CONSUMER_GROUP=q5_counter
     - SHARD_ID=0
     - N_UPSTREAM=3
@@ -1228,7 +1231,7 @@ services:
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q5_countable_exc
+    - INPUT_EXCHANGE=q5_small_amounts_exc
     - CONSUMER_GROUP=q5_counter
     - SHARD_ID=1
     - N_UPSTREAM=3
@@ -1245,7 +1248,7 @@ services:
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q5_countable_exc
+    - INPUT_EXCHANGE=q5_small_amounts_exc
     - CONSUMER_GROUP=q5_counter
     - SHARD_ID=2
     - N_UPSTREAM=3
@@ -1300,7 +1303,7 @@ services:
     - INPUT_EXCHANGE=q5_reduced_exc
     - CONSUMER_GROUP=q5_filter_01092022_05092022
     - SHARD_ID=0
-    - OUTPUT_EXCHANGE=q5_converter_to_usd_exc
+    - OUTPUT_EXCHANGE=q5_payment_format_exc
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
@@ -1320,7 +1323,7 @@ services:
     - INPUT_EXCHANGE=q5_reduced_exc
     - CONSUMER_GROUP=q5_filter_01092022_05092022
     - SHARD_ID=1
-    - OUTPUT_EXCHANGE=q5_converter_to_usd_exc
+    - OUTPUT_EXCHANGE=q5_payment_format_exc
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
@@ -1340,7 +1343,7 @@ services:
     - INPUT_EXCHANGE=q5_reduced_exc
     - CONSUMER_GROUP=q5_filter_01092022_05092022
     - SHARD_ID=2
-    - OUTPUT_EXCHANGE=q5_converter_to_usd_exc
+    - OUTPUT_EXCHANGE=q5_payment_format_exc
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
@@ -1426,13 +1429,12 @@ services:
     - SECONDARY_N_UPSTREAM=1
     - MAIN_OUTPUT_QUEUE=q5_reqs_currency_rates_api
     - SECONDARY_OUTPUT_EXCHANGE=q5_converted_amounts_exc
-    - SEC_OUTPUT_SHARDS=1
+    - SEC_OUTPUT_SHARDS=3
     - MAIN_EOF_DEST=MAIN
     - SEC_EOF_DEST=SECONDARY
     - TARGET_CURRENCY=US Dollar
     - BATCH_SIZE=1
     - SEC_BATCH_SIZE=5000
-    - SECONDARY_OUTPUT_SHARDS=3
   q5_money_converter_1:
     build:
       context: ./src
@@ -1454,13 +1456,12 @@ services:
     - SECONDARY_N_UPSTREAM=1
     - MAIN_OUTPUT_QUEUE=q5_reqs_currency_rates_api
     - SECONDARY_OUTPUT_EXCHANGE=q5_converted_amounts_exc
-    - SEC_OUTPUT_SHARDS=1
+    - SEC_OUTPUT_SHARDS=3
     - MAIN_EOF_DEST=MAIN
     - SEC_EOF_DEST=SECONDARY
     - TARGET_CURRENCY=US Dollar
     - BATCH_SIZE=1
     - SEC_BATCH_SIZE=5000
-    - SECONDARY_OUTPUT_SHARDS=3
   q5_money_converter_2:
     build:
       context: ./src
@@ -1482,13 +1483,12 @@ services:
     - SECONDARY_N_UPSTREAM=1
     - MAIN_OUTPUT_QUEUE=q5_reqs_currency_rates_api
     - SECONDARY_OUTPUT_EXCHANGE=q5_converted_amounts_exc
-    - SEC_OUTPUT_SHARDS=1
+    - SEC_OUTPUT_SHARDS=3
     - MAIN_EOF_DEST=MAIN
     - SEC_EOF_DEST=SECONDARY
     - TARGET_CURRENCY=US Dollar
     - BATCH_SIZE=1
     - SEC_BATCH_SIZE=5000
-    - SECONDARY_OUTPUT_SHARDS=3
   q5_money_converter_api_client_0:
     build:
       context: ./src
@@ -1520,10 +1520,10 @@ services:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
     - N_UPSTREAM=3
-    - INPUT_EXCHANGE=q5_small_amounts_exc
+    - INPUT_EXCHANGE=q5_payment_format_exc
     - CONSUMER_GROUP=q5_payment_fmt_filter
     - SHARD_ID=0
-    - OUTPUT_EXCHANGE=q5_countable_exc
+    - OUTPUT_EXCHANGE=q5_converter_to_usd_exc
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Payment Format
     - FILTER_OP=in
@@ -1540,10 +1540,10 @@ services:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
     - N_UPSTREAM=3
-    - INPUT_EXCHANGE=q5_small_amounts_exc
+    - INPUT_EXCHANGE=q5_payment_format_exc
     - CONSUMER_GROUP=q5_payment_fmt_filter
     - SHARD_ID=1
-    - OUTPUT_EXCHANGE=q5_countable_exc
+    - OUTPUT_EXCHANGE=q5_converter_to_usd_exc
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Payment Format
     - FILTER_OP=in
@@ -1560,10 +1560,10 @@ services:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
     - N_UPSTREAM=3
-    - INPUT_EXCHANGE=q5_small_amounts_exc
+    - INPUT_EXCHANGE=q5_payment_format_exc
     - CONSUMER_GROUP=q5_payment_fmt_filter
     - SHARD_ID=2
-    - OUTPUT_EXCHANGE=q5_countable_exc
+    - OUTPUT_EXCHANGE=q5_converter_to_usd_exc
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Payment Format
     - FILTER_OP=in
