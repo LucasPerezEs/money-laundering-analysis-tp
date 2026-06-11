@@ -50,7 +50,7 @@ def generate_docker_compose_file(
             accounts_file,
             results_dir,
             total_clients=total_clients,
-            batch_size="20000"
+            batch_size="2000"
         )
         services = services | clients_services
 

@@ -6,3 +6,4 @@ datasets/*
 venv
 # Results
 results/*
+expected_results/*

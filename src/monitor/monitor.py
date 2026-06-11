@@ -12,8 +12,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 HEALTH_PORT    = int(os.environ.get("HEALTH_PORT", "8888"))
-CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "5"))
-TIMEOUT        = float(os.environ.get("HEALTH_TIMEOUT", "2.0"))
+CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "15"))
+TIMEOUT        = float(os.environ.get("HEALTH_TIMEOUT", "50.0"))
 MONITOR_ID     = int(os.environ.get("MONITOR_ID", "0"))
 WORKERS        = [w.strip() for w in os.environ.get("WORKERS", "").split(",") if w.strip()]
 SUCCESSORS     = [s.strip() for s in os.environ.get("SUCCESSORS", "").split(",") if s.strip()]

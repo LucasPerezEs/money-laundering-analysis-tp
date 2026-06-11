@@ -1,23 +1,3 @@
-"""
-WorkerBase: clase base para todos los workers.
-
-
-MessageMiddlewareQueueRabbitMQ: para colas simples
-ShardedExchangeConsumer: para consumir un shard de exchange
-ShardedExchangeProducer: para publicar con sharding
-
-Variables de entorno:
-  RABBITMQ_HOST: host de RabbitMQ (default: rabbitmq)
-  INPUT_QUEUE: cola de entrada (si consume de cola simple)
-  INPUT_EXCHANGE: exchange de entrada (si consume de shard)
-  CONSUMER_GROUP  : nombre logico de la etapa consumidora del exchange
-  SHARD_ID        : id del shard de este worker
-  N_UPSTREAM      : cantidad de EOFs a esperar
-  OUTPUT_QUEUE    : cola de salida simple
-  OUTPUT_EXCHANGE : exchange de salida con sharding
-  OUTPUT_SHARDS   : cantidad de shards de salida (default 1)
-  BATCH_SIZE      : filas por batch de salida (default 500)
-"""
 import logging
 import os
 import random
@@ -56,6 +36,7 @@ def _wait_for_rabbitmq():
 class WorkerBase(HealthCheckServer):
 
     def __init__(self):
+        super().__init__()
         self.input_queue     = os.environ.get("INPUT_QUEUE", "")
         self.input_exchange  = os.environ.get("INPUT_EXCHANGE", "")
         self.consumer_group  = os.environ.get("CONSUMER_GROUP", self.__class__.__name__)
@@ -105,11 +86,6 @@ class WorkerBase(HealthCheckServer):
         else:
             raise ValueError("Se requiere INPUT_QUEUE o INPUT_EXCHANGE + SHARD_ID")
 
-        # cleanup_exc = os.environ.get("CLEANUP_EXCHANGE", "cleanup_exc")
-        # self._cleanup_consumer = ShardedExchangeConsumer(
-        #     RABBITMQ_HOST, cleanup_exc, self.shard_id, self.consumer_group
-        # )
-
         # Output
         if self.output_exchange and self.output_shards >= 1:
             self._producer = ShardedExchangeProducer(RABBITMQ_HOST, self.output_exchange, self.output_shards)
@@ -158,7 +134,8 @@ class WorkerBase(HealthCheckServer):
         checkpoint_body = serialize({
             "type": "checkpoint",
             "client_id": client_id,
-            "checkpoint_id": checkpoint_id
+            "checkpoint_id": checkpoint_id,
+            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}"
         })
         self._ensure_producer()
         try:
@@ -194,14 +171,11 @@ class WorkerBase(HealthCheckServer):
         except Exception:
             pass
 
-    # --- Para implementar en subclases -------------------------------------------
-
     def process(self, data: dict) -> list:
         raise NotImplementedError
 
     def on_eof(self, client_id=None) -> list:
         return []
-
 
     def _routing_key(self, msg: dict) -> str:
         if self.output_exchange and self.output_shards >= 1:
@@ -210,7 +184,7 @@ class WorkerBase(HealthCheckServer):
                 val = str(msg[routing_field]).encode()
                 return str(zlib.crc32(val) % self.output_shards)
             else:
-                # FIX: Enrutamiento determinístico basado en el contenido para tolerancia a fallos
+                # Enrutamiento determinístico basado en el contenido para tolerancia a fallos
                 val = json.dumps(msg, sort_keys=True).encode()
                 return str(zlib.crc32(val) % self.output_shards)
         return "__queue__"
@@ -223,8 +197,6 @@ class WorkerBase(HealthCheckServer):
             if client_id is not None:
                 return f"client:{client_id}"
         return "__queue__"
-
-    # --- Emisión con Buffer y flush --------------------------------------------------------
 
     def _emit(self, results: list):
         if not results or self._producer is None:
@@ -239,7 +211,7 @@ class WorkerBase(HealthCheckServer):
         rows = self._buffer.pop(buf_key, [])
         if not rows:
             return
-        body = serialize({"rows": rows})
+        body = serialize({"rows": rows, "_worker_node_id": f"{self.consumer_group}_{self.shard_id}"})
         self._ensure_producer()
         try:
             if self.output_exchange and self.output_shards >= 1:
@@ -268,7 +240,10 @@ class WorkerBase(HealthCheckServer):
     def _send_eof(self, client_id=None):
         if self._producer is None:
             return
-        eof_msg = {"type": "eof"}
+        eof_msg = {
+            "type": "eof", 
+            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}"
+        }
         if client_id is not None:
             eof_msg["client_id"] = client_id
         eof_body = serialize(eof_msg)
@@ -292,6 +267,7 @@ class WorkerBase(HealthCheckServer):
                 self._producer.send_eof_to_all(eof_body)
             else:
                 self._producer.send(eof_body)
+
     # --- Loop principal ---------------------------------------------------------
 
     def run(self):
@@ -443,3 +419,4 @@ class WorkerBase(HealthCheckServer):
             except Exception as e:
                 logger.error(f"Error inesperado en {self.__class__.__name__}: {e}")
                 break
+

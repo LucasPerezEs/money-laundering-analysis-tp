@@ -5,7 +5,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class HealthCheckServer:
     """
     Mixin. Agrega un servidor TCP que responde b'OK\n' a cualquier conexión.
@@ -31,13 +30,11 @@ class HealthCheckServer:
                 except socket.timeout:
                     continue
                 except OSError:
-                    # Sale solo si el socket base del servidor muere
                     break 
 
                 try:
                     conn.sendall(b"OK\n")
                 except OSError:
-                    # Ignora errores de red (ej: BrokenPipeError) si el monitor desconecta antes
                     pass 
                 finally:
                     try:

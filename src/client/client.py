@@ -287,6 +287,8 @@ class Client:
             os.makedirs(output_dir, exist_ok=True)
             file_path = os.path.join(output_dir, f"results_q1.csv")
             open(file_path, "w").close()
+            file_path = os.path.join(output_dir, f"results_q4.csv")
+            open(file_path, "w").close()
             file_path = os.path.join(output_dir, f"results_q5.csv")
             open(file_path, "w").close()
             self.send_accounts_and_transactions()

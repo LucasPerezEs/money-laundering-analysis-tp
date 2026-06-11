@@ -54,7 +54,10 @@ class BarrierFilter(WorkerBaseDoubleIO):
         with open(path, "r", encoding="utf-8") as spool_file:
             for line in spool_file:
                 if line.strip():
-                    yield json.loads(line)
+                    try:
+                        yield json.loads(line)
+                    except json.JSONDecodeError:
+                        logging.warning("Línea JSON corrupta ignorada en el spool file (posible SIGKILL durante flush).")
 
     def _delete_path(self, path):
         try:

@@ -3,7 +3,7 @@ services:
     build:
       context: ./scripts
     environment:
-    - CHAOS_TARGETS=usd_filter_0,q1_data_reducer_0,q1_filter_lt_50_0,q2_aggregator_0,q2_data_reducer_0,q3_avg_and_transactions_joiner_0,q3_avg_aggregators_preceding_period_0,q4_paths_creators_0,q5_money_converter_0
+    - CHAOS_TARGETS=usd_filter_0,q1_data_reducer_0,q2_aggregator_0,q2_banks_name_adder_0,q3_avg_and_transactions_joiner_0,q4_inc_edges_filter_0,q4_paths_creators_0,q5_money_converter_0
     - CHAOS_INTERVAL=30
     - CHAOS_MIN_WAIT=30
     profiles:
@@ -28,7 +28,7 @@ services:
     - ACCOUNTS_FILE=/datasets/accounts_medium_reduced.csv
     - CLIENT_ID=0
     - RESULTS_DIR=/results
-    - BATCH_SIZE=20000
+    - BATCH_SIZE=2000
     volumes:
     - ./datasets:/datasets
     - ./results:/results
@@ -50,7 +50,7 @@ services:
     - ACCOUNTS_FILE=/datasets/accounts_medium_reduced.csv
     - CLIENT_ID=1
     - RESULTS_DIR=/results
-    - BATCH_SIZE=20000
+    - BATCH_SIZE=2000
     volumes:
     - ./datasets:/datasets
     - ./results:/results
@@ -69,10 +69,13 @@ services:
     - SERVER_PORT=7659
     - GATEWAY_OUTPUT_BATCH_SIZE=10000
     - OUTPUT_EXCHANGE=gateway_exc
+    - BANK_OUTPUT_EXCHANGE=q2_banks_exchange
     - INPUT_QUEUE_PREFIX=results
     - TOTAL_QUERIES=5
-    - MAX_IN_FLIGHT_BATCHES=1000
+    - MAX_IN_FLIGHT_BATCHES=1200
     - OUTPUT_SHARDS=2
+    - BANK_OUTPUT_SHARDS=2
+    - BANKS_OUTPUT_SHARDS=2 
     - QUERY_1_N_UPSTREAM=2
     - QUERY_2_N_UPSTREAM=2
     - QUERY_3_N_UPSTREAM=3
@@ -91,9 +94,9 @@ services:
     - SUCCESSORS=monitor_1,monitor_2
     - HEALTH_PORT=8888
     - CHECK_INTERVAL=10
-    - HEALTH_TIMEOUT=5
+    - HEALTH_TIMEOUT=50
     - MAX_FAILURES=4
-    - WORKERS=gateway,usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_prefix_0,q4_splitters_by_origin_and_dest_prefix_1,q4_splitters_by_origin_and_dest_prefix_2,q4_transaction_graph_0,q4_transaction_graph_1,q4_transaction_graph_2,q4_transaction_graph_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_splitters_by_ends_0,q4_paths_splitters_by_ends_1,q4_paths_splitters_by_ends_2,q4_paths_splitters_by_ends_3,q4_unique_paths_counters_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0
+    - WORKERS=gateway,usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q2_banks_name_adder_0,q2_banks_name_adder_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_out_0,q4_splitters_by_origin_and_dest_out_1,q4_splitters_by_origin_and_dest_out_2,q4_out_edges_filter_0,q4_out_edges_filter_1,q4_out_edges_filter_2,q4_out_edges_filter_3,q4_splitters_by_origin_and_dest_inc_0,q4_splitters_by_origin_and_dest_inc_1,q4_splitters_by_origin_and_dest_inc_2,q4_inc_edges_filter_0,q4_inc_edges_filter_1,q4_inc_edges_filter_2,q4_inc_edges_filter_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_aggregator_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0
     restart: unless-stopped
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
@@ -108,9 +111,9 @@ services:
     - SUCCESSORS=monitor_2,monitor_0
     - HEALTH_PORT=8888
     - CHECK_INTERVAL=10
-    - HEALTH_TIMEOUT=5
+    - HEALTH_TIMEOUT=50
     - MAX_FAILURES=4
-    - WORKERS=gateway,usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_prefix_0,q4_splitters_by_origin_and_dest_prefix_1,q4_splitters_by_origin_and_dest_prefix_2,q4_transaction_graph_0,q4_transaction_graph_1,q4_transaction_graph_2,q4_transaction_graph_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_splitters_by_ends_0,q4_paths_splitters_by_ends_1,q4_paths_splitters_by_ends_2,q4_paths_splitters_by_ends_3,q4_unique_paths_counters_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0
+    - WORKERS=gateway,usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q2_banks_name_adder_0,q2_banks_name_adder_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_out_0,q4_splitters_by_origin_and_dest_out_1,q4_splitters_by_origin_and_dest_out_2,q4_out_edges_filter_0,q4_out_edges_filter_1,q4_out_edges_filter_2,q4_out_edges_filter_3,q4_splitters_by_origin_and_dest_inc_0,q4_splitters_by_origin_and_dest_inc_1,q4_splitters_by_origin_and_dest_inc_2,q4_inc_edges_filter_0,q4_inc_edges_filter_1,q4_inc_edges_filter_2,q4_inc_edges_filter_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_aggregator_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0
     restart: unless-stopped
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
@@ -125,9 +128,9 @@ services:
     - SUCCESSORS=monitor_0,monitor_1
     - HEALTH_PORT=8888
     - CHECK_INTERVAL=10
-    - HEALTH_TIMEOUT=5
+    - HEALTH_TIMEOUT=50
     - MAX_FAILURES=4
-    - WORKERS=gateway,usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_prefix_0,q4_splitters_by_origin_and_dest_prefix_1,q4_splitters_by_origin_and_dest_prefix_2,q4_transaction_graph_0,q4_transaction_graph_1,q4_transaction_graph_2,q4_transaction_graph_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_splitters_by_ends_0,q4_paths_splitters_by_ends_1,q4_paths_splitters_by_ends_2,q4_paths_splitters_by_ends_3,q4_unique_paths_counters_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0
+    - WORKERS=gateway,usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q2_banks_name_adder_0,q2_banks_name_adder_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_out_0,q4_splitters_by_origin_and_dest_out_1,q4_splitters_by_origin_and_dest_out_2,q4_out_edges_filter_0,q4_out_edges_filter_1,q4_out_edges_filter_2,q4_out_edges_filter_3,q4_splitters_by_origin_and_dest_inc_0,q4_splitters_by_origin_and_dest_inc_1,q4_splitters_by_origin_and_dest_inc_2,q4_inc_edges_filter_0,q4_inc_edges_filter_1,q4_inc_edges_filter_2,q4_inc_edges_filter_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_aggregator_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0
     restart: unless-stopped
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
@@ -205,7 +208,7 @@ services:
     - FILTER_OP=lt
     - FILTER_VALUE=50
     - TOTAL_CLIENTS=2
-    - BATCH_SIZE=5000
+    - BATCH_SIZE=2000
   q1_filter_lt_50_1:
     build:
       context: ./src
@@ -226,7 +229,7 @@ services:
     - FILTER_OP=lt
     - FILTER_VALUE=50
     - TOTAL_CLIENTS=2
-    - BATCH_SIZE=5000
+    - BATCH_SIZE=2000
   q2_aggregator_0:
     build:
       context: ./src
@@ -242,13 +245,15 @@ services:
     - CONSUMER_GROUP=q2_aggregator
     - SHARD_ID=0
     - N_UPSTREAM=2
-    - OUTPUT_QUEUE=results_2
+    - OUTPUT_EXCHANGE=q2_results_formatter
     - AGG_OP=max
     - AGG_FIELD=Amount Paid
     - KEY_FIELD=From Bank
+    - ROUTING_FIELD=From Bank
     - CARRY_FIELDS=Account
     - TOTAL_CLIENTS=2
-    - BATCH_SIZE=5000
+    - BATCH_SIZE=2000
+    - OUTPUT_SHARDS=2
   q2_aggregator_1:
     build:
       context: ./src
@@ -264,13 +269,59 @@ services:
     - CONSUMER_GROUP=q2_aggregator
     - SHARD_ID=1
     - N_UPSTREAM=2
-    - OUTPUT_QUEUE=results_2
+    - OUTPUT_EXCHANGE=q2_results_formatter
     - AGG_OP=max
     - AGG_FIELD=Amount Paid
     - KEY_FIELD=From Bank
+    - ROUTING_FIELD=From Bank
     - CARRY_FIELDS=Account
     - TOTAL_CLIENTS=2
-    - BATCH_SIZE=5000
+    - BATCH_SIZE=2000
+    - OUTPUT_SHARDS=2
+  q2_banks_name_adder_0:
+    build:
+      context: ./src
+      dockerfile: bank_name_adder/Dockerfile
+    container_name: q2_banks_name_adder_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - OP_MODE=PIPELINE
+    - MAIN_INPUT_EXCHANGE=q2_results_formatter
+    - CONSUMER_GROUP=q2_banks_name_adder
+    - SHARD_ID=0
+    - SECONDARY_INPUT_EXCHANGE=q2_banks_exchange
+    - SHARD_ID=0
+    - MAIN_N_UPSTREAM=2
+    - SECONDARY_N_UPSTREAM=1
+    - SECONDARY_OUTPUT_QUEUE=results_2
+    - MAIN_EOF_DEST=SECONDARY
+    - SEC_EOF_DEST=NONE
+  q2_banks_name_adder_1:
+    build:
+      context: ./src
+      dockerfile: bank_name_adder/Dockerfile
+    container_name: q2_banks_name_adder_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - OP_MODE=PIPELINE
+    - MAIN_INPUT_EXCHANGE=q2_results_formatter
+    - CONSUMER_GROUP=q2_banks_name_adder
+    - SHARD_ID=1
+    - SECONDARY_INPUT_EXCHANGE=q2_banks_exchange
+    - SHARD_ID=1
+    - MAIN_N_UPSTREAM=2
+    - SECONDARY_N_UPSTREAM=1
+    - SECONDARY_OUTPUT_QUEUE=results_2
+    - MAIN_EOF_DEST=SECONDARY
+    - SEC_EOF_DEST=NONE
   q2_data_reducer_0:
     build:
       context: ./src
@@ -326,6 +377,7 @@ services:
     - INPUT_EXCHANGE=usd_transactions_exc
     - CONSUMER_GROUP=q2_splitter_by_bank
     - SHARD_ID=0
+    - NORMALIZE_NUMERIC_KEY=true
     - OUTPUT_EXCHANGE=q2_by_bank_exc
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
@@ -348,6 +400,7 @@ services:
     - INPUT_EXCHANGE=usd_transactions_exc
     - CONSUMER_GROUP=q2_splitter_by_bank
     - SHARD_ID=1
+    - NORMALIZE_NUMERIC_KEY=true
     - OUTPUT_EXCHANGE=q2_by_bank_exc
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
@@ -370,6 +423,7 @@ services:
     - INPUT_EXCHANGE=usd_transactions_exc
     - CONSUMER_GROUP=q2_splitter_by_bank
     - SHARD_ID=2
+    - NORMALIZE_NUMERIC_KEY=true
     - OUTPUT_EXCHANGE=q2_by_bank_exc
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
@@ -458,7 +512,7 @@ services:
     - MAIN_N_UPSTREAM=3
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
-    - BATCH_SIZE=10000
+    - BATCH_SIZE=2000
   q3_avg_and_transactions_joiner_1:
     build:
       context: ./src
@@ -479,7 +533,7 @@ services:
     - MAIN_N_UPSTREAM=3
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
-    - BATCH_SIZE=10000
+    - BATCH_SIZE=2000
   q3_avg_and_transactions_joiner_2:
     build:
       context: ./src
@@ -500,7 +554,7 @@ services:
     - MAIN_N_UPSTREAM=3
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
-    - BATCH_SIZE=10000
+    - BATCH_SIZE=2000
   q3_data_reducer_0:
     build:
       context: ./src
@@ -804,7 +858,7 @@ services:
     - INPUT_EXCHANGE=q4_reduced_data_exc
     - CONSUMER_GROUP=q4_filter_01092022_05092022_prefix
     - SHARD_ID=0
-    - OUTPUT_EXCHANGE=q4_splitter_exc
+    - OUTPUT_EXCHANGE=q4_splitters_exc
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
@@ -824,7 +878,7 @@ services:
     - INPUT_EXCHANGE=q4_reduced_data_exc
     - CONSUMER_GROUP=q4_filter_01092022_05092022_prefix
     - SHARD_ID=1
-    - OUTPUT_EXCHANGE=q4_splitter_exc
+    - OUTPUT_EXCHANGE=q4_splitters_exc
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
@@ -844,312 +898,398 @@ services:
     - INPUT_EXCHANGE=q4_reduced_data_exc
     - CONSUMER_GROUP=q4_filter_01092022_05092022_prefix
     - SHARD_ID=2
-    - OUTPUT_EXCHANGE=q4_splitter_exc
+    - OUTPUT_EXCHANGE=q4_splitters_exc
     - OUTPUT_SHARDS=3
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
-  q4_paths_creators_0:
+  q4_inc_edges_filter_0:
     build:
-      context: ./src/
-      dockerfile: paths_creator/Dockerfile
-    container_name: q4_paths_creators_0
+      context: ./src
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_inc_edges_filter_0
     depends_on:
       rabbitmq:
         condition: service_healthy
+    entrypoint:
+    - python3
+    - incoming_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=4
-    - INPUT_EXCHANGE=q4_edges_exc
-    - CONSUMER_GROUP=q4_paths_creators
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - CONSUMER_GROUP=q4_inc_edges_filter
     - SHARD_ID=0
-    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
-  q4_paths_creators_1:
+  q4_inc_edges_filter_1:
     build:
-      context: ./src/
-      dockerfile: paths_creator/Dockerfile
-    container_name: q4_paths_creators_1
+      context: ./src
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_inc_edges_filter_1
     depends_on:
       rabbitmq:
         condition: service_healthy
+    entrypoint:
+    - python3
+    - incoming_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=4
-    - INPUT_EXCHANGE=q4_edges_exc
-    - CONSUMER_GROUP=q4_paths_creators
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - CONSUMER_GROUP=q4_inc_edges_filter
     - SHARD_ID=1
-    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
-  q4_paths_creators_2:
+  q4_inc_edges_filter_2:
     build:
-      context: ./src/
-      dockerfile: paths_creator/Dockerfile
-    container_name: q4_paths_creators_2
+      context: ./src
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_inc_edges_filter_2
     depends_on:
       rabbitmq:
         condition: service_healthy
+    entrypoint:
+    - python3
+    - incoming_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=4
-    - INPUT_EXCHANGE=q4_edges_exc
-    - CONSUMER_GROUP=q4_paths_creators
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - CONSUMER_GROUP=q4_inc_edges_filter
     - SHARD_ID=2
-    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
-  q4_paths_creators_3:
+  q4_inc_edges_filter_3:
     build:
-      context: ./src/
-      dockerfile: paths_creator/Dockerfile
-    container_name: q4_paths_creators_3
+      context: ./src
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_inc_edges_filter_3
     depends_on:
       rabbitmq:
         condition: service_healthy
+    entrypoint:
+    - python3
+    - incoming_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=4
-    - INPUT_EXCHANGE=q4_edges_exc
-    - CONSUMER_GROUP=q4_paths_creators
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - CONSUMER_GROUP=q4_inc_edges_filter
     - SHARD_ID=3
-    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
-  q4_paths_splitters_by_ends_0:
+  q4_out_edges_filter_0:
     build:
       context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_paths_splitters_by_ends_0
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_out_edges_filter_0
     depends_on:
       rabbitmq:
         condition: service_healthy
     entrypoint:
     - python3
-    - /app/splitter.py
+    - outgoing_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_paths_exc
-    - CONSUMER_GROUP=q4_paths_splitters_by_ends
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_out_edges_filter_exc
+    - CONSUMER_GROUP=q4_out_edges_filter
     - SHARD_ID=0
-    - OUTPUT_EXCHANGE=q4_unique_paths_counter_exc
-    - N_UPSTREAM=4
-    - OUTPUT_SHARDS=1
-    - SHARD_KEY_FIELDS=From Bank,Account,To Bank,Account.1
-  q4_paths_splitters_by_ends_1:
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
+    - OUTPUT_SHARDS=4
+  q4_out_edges_filter_1:
     build:
       context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_paths_splitters_by_ends_1
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_out_edges_filter_1
     depends_on:
       rabbitmq:
         condition: service_healthy
     entrypoint:
     - python3
-    - /app/splitter.py
+    - outgoing_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_paths_exc
-    - CONSUMER_GROUP=q4_paths_splitters_by_ends
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_out_edges_filter_exc
+    - CONSUMER_GROUP=q4_out_edges_filter
     - SHARD_ID=1
-    - OUTPUT_EXCHANGE=q4_unique_paths_counter_exc
-    - N_UPSTREAM=4
-    - OUTPUT_SHARDS=1
-    - SHARD_KEY_FIELDS=From Bank,Account,To Bank,Account.1
-  q4_paths_splitters_by_ends_2:
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
+    - OUTPUT_SHARDS=4
+  q4_out_edges_filter_2:
     build:
       context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_paths_splitters_by_ends_2
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_out_edges_filter_2
     depends_on:
       rabbitmq:
         condition: service_healthy
     entrypoint:
     - python3
-    - /app/splitter.py
+    - outgoing_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_paths_exc
-    - CONSUMER_GROUP=q4_paths_splitters_by_ends
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_out_edges_filter_exc
+    - CONSUMER_GROUP=q4_out_edges_filter
     - SHARD_ID=2
-    - OUTPUT_EXCHANGE=q4_unique_paths_counter_exc
-    - N_UPSTREAM=4
-    - OUTPUT_SHARDS=1
-    - SHARD_KEY_FIELDS=From Bank,Account,To Bank,Account.1
-  q4_paths_splitters_by_ends_3:
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
+    - OUTPUT_SHARDS=4
+  q4_out_edges_filter_3:
     build:
       context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_paths_splitters_by_ends_3
+      dockerfile: graph_edges_filter/Dockerfile
+    container_name: q4_out_edges_filter_3
     depends_on:
       rabbitmq:
         condition: service_healthy
     entrypoint:
     - python3
-    - /app/splitter.py
+    - outgoing_edges_filter.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_paths_exc
-    - CONSUMER_GROUP=q4_paths_splitters_by_ends
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q4_out_edges_filter_exc
+    - CONSUMER_GROUP=q4_out_edges_filter
     - SHARD_ID=3
-    - OUTPUT_EXCHANGE=q4_unique_paths_counter_exc
-    - N_UPSTREAM=4
-    - OUTPUT_SHARDS=1
-    - SHARD_KEY_FIELDS=From Bank,Account,To Bank,Account.1
-  q4_splitters_by_origin_and_dest_prefix_0:
+    - OUTPUT_EXCHANGE=q4_candidates_edges_exc
+    - OUTPUT_SHARDS=4
+  q4_paths_aggregator_0:
     build:
       context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_splitters_by_origin_and_dest_prefix_0
+      dockerfile: graph_paths/Dockerfile
+    container_name: q4_paths_aggregator_0
     depends_on:
       rabbitmq:
         condition: service_healthy
     entrypoint:
     - python3
-    - /app/splitter.py
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_splitter_exc
-    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_prefix
-    - SHARD_ID=0
-    - OUTPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - N_UPSTREAM=3
-    - OUTPUT_SHARDS=4
-    - SHARD_KEY_FIELDS=From Bank,Account
-  q4_splitters_by_origin_and_dest_prefix_1:
-    build:
-      context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_splitters_by_origin_and_dest_prefix_1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    entrypoint:
-    - python3
-    - /app/splitter.py
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_splitter_exc
-    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_prefix
-    - SHARD_ID=1
-    - OUTPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - N_UPSTREAM=3
-    - OUTPUT_SHARDS=4
-    - SHARD_KEY_FIELDS=From Bank,Account
-  q4_splitters_by_origin_and_dest_prefix_2:
-    build:
-      context: ./src
-      dockerfile: aggregators/Dockerfile
-    container_name: q4_splitters_by_origin_and_dest_prefix_2
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    entrypoint:
-    - python3
-    - /app/splitter.py
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q4_splitter_exc
-    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_prefix
-    - SHARD_ID=2
-    - OUTPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - N_UPSTREAM=3
-    - OUTPUT_SHARDS=4
-    - SHARD_KEY_FIELDS=From Bank,Account
-  q4_transaction_graph_0:
-    build:
-      context: ./src/
-      dockerfile: transactions_graph/Dockerfile
-    container_name: q4_transaction_graph_0
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=3
-    - INPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - CONSUMER_GROUP=q4_transaction_graph
-    - SHARD_ID=0
-    - OUTPUT_EXCHANGE=q4_edges_exc
-    - OUTPUT_SHARDS=4
-  q4_transaction_graph_1:
-    build:
-      context: ./src/
-      dockerfile: transactions_graph/Dockerfile
-    container_name: q4_transaction_graph_1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=3
-    - INPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - CONSUMER_GROUP=q4_transaction_graph
-    - SHARD_ID=1
-    - OUTPUT_EXCHANGE=q4_edges_exc
-    - OUTPUT_SHARDS=4
-  q4_transaction_graph_2:
-    build:
-      context: ./src/
-      dockerfile: transactions_graph/Dockerfile
-    container_name: q4_transaction_graph_2
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=3
-    - INPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - CONSUMER_GROUP=q4_transaction_graph
-    - SHARD_ID=2
-    - OUTPUT_EXCHANGE=q4_edges_exc
-    - OUTPUT_SHARDS=4
-  q4_transaction_graph_3:
-    build:
-      context: ./src/
-      dockerfile: transactions_graph/Dockerfile
-    container_name: q4_transaction_graph_3
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-    - MOM_HOST=rabbitmq
-    - PYTHONUNBUFFERED=1
-    - N_UPSTREAM=3
-    - INPUT_EXCHANGE=q4_split_by_origin_and_dest_exc
-    - CONSUMER_GROUP=q4_transaction_graph
-    - SHARD_ID=3
-    - OUTPUT_EXCHANGE=q4_edges_exc
-    - OUTPUT_SHARDS=4
-  q4_unique_paths_counters_0:
-    build:
-      context: ./src
-      dockerfile: unique_paths_counter/Dockerfile
-    container_name: q4_unique_paths_counters_0
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
+    - paths_aggregator.py
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
     - N_UPSTREAM=4
-    - INPUT_EXCHANGE=q4_unique_paths_counter_exc
-    - CONSUMER_GROUP=q4_unique_paths_counters
+    - INPUT_EXCHANGE=q4_paths_exc
+    - CONSUMER_GROUP=q4_paths_aggregator
     - SHARD_ID=0
     - OUTPUT_QUEUE=results_4
     - TOTAL_CLIENTS=2
     - BATCH_SIZE=1000
+  q4_paths_creators_0:
+    build:
+      context: ./src
+      dockerfile: graph_paths/Dockerfile
+    container_name: q4_paths_creators_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - paths_creator.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - N_UPSTREAM=8
+    - INPUT_EXCHANGE=q4_candidates_edges_exc
+    - CONSUMER_GROUP=q4_paths_creators
+    - SHARD_ID=0
+    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_SHARDS=1
+  q4_paths_creators_1:
+    build:
+      context: ./src
+      dockerfile: graph_paths/Dockerfile
+    container_name: q4_paths_creators_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - paths_creator.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - N_UPSTREAM=8
+    - INPUT_EXCHANGE=q4_candidates_edges_exc
+    - CONSUMER_GROUP=q4_paths_creators
+    - SHARD_ID=1
+    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_SHARDS=1
+  q4_paths_creators_2:
+    build:
+      context: ./src
+      dockerfile: graph_paths/Dockerfile
+    container_name: q4_paths_creators_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - paths_creator.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - N_UPSTREAM=8
+    - INPUT_EXCHANGE=q4_candidates_edges_exc
+    - CONSUMER_GROUP=q4_paths_creators
+    - SHARD_ID=2
+    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_SHARDS=1
+  q4_paths_creators_3:
+    build:
+      context: ./src
+      dockerfile: graph_paths/Dockerfile
+    container_name: q4_paths_creators_3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - paths_creator.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - N_UPSTREAM=8
+    - INPUT_EXCHANGE=q4_candidates_edges_exc
+    - CONSUMER_GROUP=q4_paths_creators
+    - SHARD_ID=3
+    - OUTPUT_EXCHANGE=q4_paths_exc
+    - OUTPUT_SHARDS=1
+  q4_splitters_by_origin_and_dest_inc_0:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q4_splitters_by_origin_and_dest_inc_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - /app/splitter.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_EXCHANGE=q4_splitters_exc
+    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_inc
+    - SHARD_ID=0
+    - OUTPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - N_UPSTREAM=3
+    - OUTPUT_SHARDS=4
+    - SHARD_KEY_FIELDS=To Bank,Account.1
+  q4_splitters_by_origin_and_dest_inc_1:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q4_splitters_by_origin_and_dest_inc_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - /app/splitter.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_EXCHANGE=q4_splitters_exc
+    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_inc
+    - SHARD_ID=1
+    - OUTPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - N_UPSTREAM=3
+    - OUTPUT_SHARDS=4
+    - SHARD_KEY_FIELDS=To Bank,Account.1
+  q4_splitters_by_origin_and_dest_inc_2:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q4_splitters_by_origin_and_dest_inc_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - /app/splitter.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_EXCHANGE=q4_splitters_exc
+    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_inc
+    - SHARD_ID=2
+    - OUTPUT_EXCHANGE=q4_inc_edges_filter_exc
+    - N_UPSTREAM=3
+    - OUTPUT_SHARDS=4
+    - SHARD_KEY_FIELDS=To Bank,Account.1
+  q4_splitters_by_origin_and_dest_out_0:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q4_splitters_by_origin_and_dest_out_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - /app/splitter.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_EXCHANGE=q4_splitters_exc
+    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_out
+    - SHARD_ID=0
+    - OUTPUT_EXCHANGE=q4_out_edges_filter_exc
+    - N_UPSTREAM=3
+    - OUTPUT_SHARDS=4
+    - SHARD_KEY_FIELDS=From Bank,Account
+  q4_splitters_by_origin_and_dest_out_1:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q4_splitters_by_origin_and_dest_out_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - /app/splitter.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_EXCHANGE=q4_splitters_exc
+    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_out
+    - SHARD_ID=1
+    - OUTPUT_EXCHANGE=q4_out_edges_filter_exc
+    - N_UPSTREAM=3
+    - OUTPUT_SHARDS=4
+    - SHARD_KEY_FIELDS=From Bank,Account
+  q4_splitters_by_origin_and_dest_out_2:
+    build:
+      context: ./src
+      dockerfile: aggregators/Dockerfile
+    container_name: q4_splitters_by_origin_and_dest_out_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    entrypoint:
+    - python3
+    - /app/splitter.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - INPUT_EXCHANGE=q4_splitters_exc
+    - CONSUMER_GROUP=q4_splitters_by_origin_and_dest_out
+    - SHARD_ID=2
+    - OUTPUT_EXCHANGE=q4_out_edges_filter_exc
+    - N_UPSTREAM=3
+    - OUTPUT_SHARDS=4
+    - SHARD_KEY_FIELDS=From Bank,Account
   q5_counter_0:
     build:
       context: ./src
@@ -1359,6 +1499,7 @@ services:
     build:
       context: ./src
       dockerfile: money_converter/Dockerfile
+    container_name: q5_money_converter_0
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1376,6 +1517,7 @@ services:
     build:
       context: ./src
       dockerfile: money_converter/Dockerfile
+    container_name: q5_money_converter_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1393,6 +1535,7 @@ services:
     build:
       context: ./src
       dockerfile: money_converter/Dockerfile
+    container_name: q5_money_converter_2
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1410,6 +1553,7 @@ services:
     build:
       context: ./src
       dockerfile: money_converter/Dockerfile
+    container_name: q5_money_converter_api_client_0
     depends_on:
       rabbitmq:
         condition: service_healthy

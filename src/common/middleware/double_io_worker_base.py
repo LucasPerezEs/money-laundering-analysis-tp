@@ -1,32 +1,3 @@
-"""
-WorkerBase: clase base para todos los workers.
-
-
-MessageMiddlewareQueueRabbitMQ: para colas simples
-ShardedExchangeConsumer: para consumir un shard de exchange
-ShardedExchangeProducer: para publicar con sharding
-
-Variables de entorno:
-  RABBITMQ_HOST: host de RabbitMQ (default: rabbitmq)
-  MAIN_INPUT_QUEUE: cola de entrada principal (si consume de cola simple)
-  MAIN_INPUT_EXCHANGE: exchange de entrada principal (si consume de shard)
-  SECONDARY_INPUT_QUEUE: cola de entrada secundaria (si consume de cola simple)
-  SECONDARY_INPUT_EXCHANGE: exchange de entrada secundaria (si consume de shard)
-  CONSUMER_GROUP  : nombre logico de la etapa consumidora del exchange
-  SHARD_ID        : id del shard de este worker
-  N_UPSTREAM_MAIN : cantidad de EOFs a esperar de la entrada principal
-  N_UPSTREAM_SECONDARY : cantidad de EOFs a esperar de la entrada secundaria
-  MAIN_OUTPUT_QUEUE    : cola de salida simple principal
-  MAIN_OUTPUT_QUEUE    : cola de salida simple secundaria
-  MAIN_OUTPUT_EXCHANGE : exchange de salida con sharding principal
-  SECONDARY_OUTPUT_EXCHANGE : exchange de salida con sharding secundaria
-  MAIN_OUTPUT_SHARDS    : cantidad de shards de salida principal (default 1)
-  SEC_OUTPUT_SHARDS     : cantidad de shards de salida secundaria (default 1)
-  BATCH_SIZE      : filas por batch de salida (default 500)
-  OP_MODE           : Modo de operación del worker. JOINER si se quiere que se use como joiner de
-                        de dos entradas o PIPELINE si se quieren realizar acciones primero con la
-                        entrada principal y luego con la entrada secundaria.
-"""
 import json
 import logging
 import os
@@ -65,6 +36,7 @@ def _wait_for_rabbitmq():
 class WorkerBaseDoubleIO(HealthCheckServer):
 
     def __init__(self):
+        super().__init__()
         self.batch_size      = int(os.environ.get("BATCH_SIZE", "500"))
         self.sec_batch_size  = int(os.environ.get("SEC_BATCH_SIZE", str(self.batch_size)))
         self.total_clients   = int(os.environ.get("TOTAL_CLIENTS", "0"))
@@ -251,7 +223,10 @@ class WorkerBaseDoubleIO(HealthCheckServer):
         rows = self._main_out_buffer.pop(buf_key, [])
         if not rows:
             return
-        body = serialize({"rows": rows})
+        body = serialize({
+            "rows": rows, 
+            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}_main"
+        })
         self._ensure_main_producer()
         try:
             if self.main_output_exchange and self.main_output_shards > 1:
@@ -269,7 +244,10 @@ class WorkerBaseDoubleIO(HealthCheckServer):
         rows = self._sec_out_buffer.pop(buf_key, [])
         if not rows:
             return
-        body = serialize({"rows": rows})
+        body = serialize({
+            "rows": rows, 
+            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}_sec"
+        })
         self._ensure_sec_producer()
         try:
             if self.sec_output_exchange and self.sec_output_shards > 1:
@@ -298,7 +276,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
     def _send_main_checkpoint(self, client_id, checkpoint_id):
         if self._main_producer is None:
             return
-        chk_msg = {"type": "checkpoint", "client_id": client_id, "checkpoint_id": checkpoint_id}
+        chk_msg = {"type": "checkpoint", "client_id": client_id, "checkpoint_id": checkpoint_id, "_worker_node_id": f"{self.consumer_group}_{self.shard_id}_main"}
         chk_body = serialize(chk_msg)
         self._ensure_main_producer()
         try:
@@ -316,7 +294,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
     def _send_sec_checkpoint(self, client_id, checkpoint_id):
         if self._sec_producer is None:
             return
-        chk_msg = {"type": "checkpoint", "client_id": client_id, "checkpoint_id": checkpoint_id}
+        chk_msg = {"type": "checkpoint", "client_id": client_id, "checkpoint_id": checkpoint_id, "_worker_node_id": f"{self.consumer_group}_{self.shard_id}_sec"}
         chk_body = serialize(chk_msg)
         self._ensure_sec_producer()
         try:
@@ -334,7 +312,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
     def _send_main_output_eof(self, client_id=None):
         if self._main_producer is None:
             return
-        eof_msg = {"type": "eof"}
+        eof_msg = {"type": "eof", "_worker_node_id": f"{self.consumer_group}_{self.shard_id}_main"}
         if client_id is not None:
             eof_msg["client_id"] = client_id
         eof_body = serialize(eof_msg)
@@ -354,7 +332,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
     def _send_sec_output_eof(self, client_id=None):
         if self._sec_producer is None:
             return
-        eof_msg = {"type": "eof"}
+        eof_msg = {"type": "eof", "_worker_node_id": f"{self.consumer_group}_{self.shard_id}_sec"}
         if client_id is not None:
             eof_msg["client_id"] = client_id
         eof_body = serialize(eof_msg)
@@ -375,7 +353,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
         if self._operation_mode == "PIPELINE":
             if self._clients_eof_main_input[client_id] >= self.main_n_upstream:
                 for result in self.on_main_input_eof(client_id):
-                    self._emit_results_main_stage([result])
+                    self._emit_results_main_stage(result)
                 self._flush_all_next_stage()
                 self._send_main_output_eof(client_id)
         else: #For joiner, check if joiner action is necessary
@@ -439,11 +417,16 @@ class WorkerBaseDoubleIO(HealthCheckServer):
 
         def on_message(body: bytes, ack, nack):
             try:
+                
                 msg_hash = hashlib.md5(body).hexdigest()
                 if msg_hash in self._processed_msgs_main:
+                    logger.warning(f"DUPLICADO IGNORADO ({msg_hash}) en {self.__class__.__name__}. Haciendo ack silencioso.")
                     ack()
                     return
+                t0 = time.perf_counter()
                 msg = deserialize(body)
+                t_deser = time.perf_counter() - t0
+  
                 if msg.get("type") == "checkpoint":
                     client_id = msg.get("client_id")
                     chk_id = msg.get("checkpoint_id")
@@ -505,12 +488,23 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                     return
 
                 else:
-                    for row in msg.get("rows", []):
+                    t_process = 0.0
+                    t_emit = 0.0
+                    for i, row in enumerate(msg.get("rows", [])):
+                        t1 = time.perf_counter()
                         if self._operation_mode == "PIPELINE":
                             self._emit_results_main_stage(self.process_main_input(row))
                         else:
                             results, _ = self.process_main_input(row)
                             self._emit_main_output(results)
+                        t2 = time.perf_counter()
+                        t_process += (t2 - t1)
+
+                        if i % 100 == 0:
+                            self._main_consumer.process_events()
+                            if self._main_producer:
+                                self._main_producer.process_events()
+
                     self.on_main_batch_complete()
                     
                     self._flush_all_next_stage() 
@@ -521,6 +515,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                     
                     # -------------------
                     ack()
+                    logger.info(f"Tiempos Main -> Deserializar: {t_deser:.4f}s | Process: {t_process:.4f}s")
             except Exception as e:
                 logger.error(f"Error procesando mensaje: {e}")
                 nack()
@@ -529,8 +524,16 @@ class WorkerBaseDoubleIO(HealthCheckServer):
         while self._running:
             try:
                 self._main_consumer.start_consuming(on_message)
+                if self._running:
+                    logger.warning("El consumo finalizo inesperadamente; reconectando")
+                    self._close_main_resources()
+                    _wait_for_rabbitmq()
+                    self._reconnect_backoff(attempt)
+                    self._main_consumer = self._create_main_consumer()
+                    attempt += 1
+                    continue
                 break
-            except MessageMiddlewareDisconnectedError:
+            except (MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError):
                 if not self._running:
                     break
                 logger.error("Conexion perdida con RabbitMQ")
@@ -539,9 +542,9 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 self._reconnect_backoff(attempt)
                 self._main_consumer = self._create_main_consumer()
                 attempt += 1
-            finally:
-                if not self._running:
-                    self._close_main_resources()
+            except Exception as e:
+                logger.error(f"Error inesperado en {self.__class__.__name__}: {e}")
+                break
 
     def handle_message_sec_input(self):
         eof_count = [0]
@@ -552,9 +555,13 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             try:
                 msg_hash = hashlib.md5(body).hexdigest()
                 if msg_hash in self._processed_msgs_sec:
+                    logger.warning(f"DUPLICADO IGNORADO ({msg_hash}) en {self.__class__.__name__}. Haciendo ack silencioso.")
                     ack()
                     return
+                t0 = time.perf_counter()
                 msg = deserialize(body)
+                t_deser = time.perf_counter() - t0
+
                 if msg.get("type") == "checkpoint":
                     client_id = msg.get("client_id")
                     chk_id = msg.get("checkpoint_id")
@@ -572,10 +579,11 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                                 del chk_acks[chk_key]
                                 del self._checkpoints_sec[chk_key]
                         else: # JOINER
+                            ack()
                             main_count = self._checkpoints_main.get(chk_key, 0)
                             sec_count = self._checkpoints_sec[chk_key]
                             
-                            # NUEVO: Obligar al proceso secundario a liberar mensajes
+                            # Obliga al proceso secundario a liberar mensajes
                             if sec_count == self.sec_n_upstream:
                                 self._flush_all_main_buffer()
                                 self._flush_all_sec_buffer()
@@ -615,11 +623,22 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                     return
 
                 else:
-                    for row in msg.get("rows", []):
+                    t_process = 0.0
+                    t_emit = 0.0
+                    for i, row in enumerate(msg.get("rows", [])):
+                        t1 = time.perf_counter()
                         if self._operation_mode == "PIPELINE":
                             self._emit_sec_output(self.process_secondary_input(row)[1])
                         else:
                             self.process_secondary_input(row)
+                        t2 = time.perf_counter()
+                        t_process += (t2 - t1)
+
+                        if i % 100 == 0:
+                            self._sec_consumer.process_events()
+                            if self._sec_producer:
+                                self._sec_producer.process_events()
+
                     self.on_sec_batch_complete()
                     
                     
@@ -630,6 +649,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                     os.fsync(self._processed_file_handle_sec.fileno())
                     # -------------------
                     ack()
+                    logger.info(f"Tiempos Sec -> Deserializar: {t_deser:.4f}s | Process: {t_process:.4f}s")
             except Exception as e:
                 logger.error(f"Error procesando mensaje: {e}")
                 nack()
@@ -638,8 +658,16 @@ class WorkerBaseDoubleIO(HealthCheckServer):
         while self._running:
             try:
                 self._sec_consumer.start_consuming(on_message)
+                if self._running:
+                    logger.warning("El consumo finalizo inesperadamente; reconectando")
+                    self._close_sec_resources()
+                    _wait_for_rabbitmq()
+                    self._reconnect_backoff(attempt)
+                    self._sec_consumer = self._create_sec_consumer()
+                    attempt += 1
+                    continue
                 break
-            except MessageMiddlewareDisconnectedError:
+            except (MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError):
                 if not self._running:
                     break
                 logger.error("Conexion perdida con RabbitMQ")
@@ -648,109 +676,9 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 self._reconnect_backoff(attempt)
                 self._sec_consumer = self._create_sec_consumer()
                 attempt += 1
-            finally:
-                if not self._running:
-                    self._close_sec_resources()
-    
-    def handle_message_sec_input(self):
-        eof_count = [0]
-
-        def on_message(body: bytes, ack, nack):
-            try:
-                msg_hash = hashlib.md5(body).hexdigest()
-                if msg_hash in self._processed_msgs_sec:
-                    ack()
-                    return
-                msg = deserialize(body)
-                if msg.get("type") == "checkpoint":
-                    client_id = msg.get("client_id")
-                    chk_id = msg.get("checkpoint_id")
-                    chk_key = f"{client_id}_{chk_id}"
-                    
-                    with self._eof_lock:
-                        self._checkpoints_sec[chk_key] = self._checkpoints_sec.get(chk_key, 0) + 1
-                        
-                        if self._operation_mode == "PIPELINE":
-                            if self._checkpoints_sec[chk_key] >= self.sec_n_upstream:
-                                self._flush_all_sec_buffer()
-                                self._send_sec_checkpoint(client_id, chk_id)
-                                del self._checkpoints_sec[chk_key]
-                        else: # JOINER
-                            main_count = self._checkpoints_main.get(chk_key, 0)
-                            sec_count = self._checkpoints_sec[chk_key]
-                            
-                            if main_count >= self.main_n_upstream and sec_count >= self.sec_n_upstream:
-                                self._flush_all_main_buffer()
-                                self._send_main_checkpoint(client_id, chk_id)
-                                try:
-                                    del self._checkpoints_main[chk_key]
-                                    del self._checkpoints_sec[chk_key]
-                                except KeyError:
-                                    pass
-                    ack()
-                    return
-                elif msg.get("type") == "eof":
-                    client_id = msg.get("client_id")
-                    if client_id is None:
-                        eof_count[0] += 1
-                        logger.info(
-                            f"{self.__class__.__name__} EOF secondary recibido "
-                            f"({eof_count[0]}/{self.sec_n_upstream})"
-                        )
-                        ack()
-                        if eof_count[0] >= self.sec_n_upstream:
-                            self._execute_eof_sec_input(None)
-                            self._sec_consumer.stop_consuming()
-                            logger.info(f"{self.__class__.__name__} terminado")
-                        return
-
-                    self._clients_eof_sec_input[client_id] = self._clients_eof_sec_input.get(client_id, 0) + 1
-                    logger.info(
-                        f"{self.__class__.__name__} EOF secondary recibido para client_id={client_id} "
-                        f"({self._clients_eof_sec_input[client_id]}/{self.sec_n_upstream})"
-                    )
-                    self._execute_eof_sec_input(client_id)
-                    ack()
-                    return
-
-
-                else:
-                    for row in msg.get("rows", []):
-                        if self._operation_mode == "PIPELINE":
-                            self._emit_sec_output(self.process_secondary_input(row)[1])
-                        else:
-                            self.process_secondary_input(row)
-                    self.on_sec_batch_complete()
-                    
-                    
-                    self._flush_all_next_stage() 
-                    self._processed_msgs_sec.add(msg_hash)
-                    self._processed_file_handle_sec.write(msg_hash + "\n")
-                    self._processed_file_handle_sec.flush()
-                    os.fsync(self._processed_file_handle_sec.fileno())
-                    # -------------------
-                    ack()
             except Exception as e:
-                logger.error(f"Error procesando mensaje: {e}")
-                nack()
-
-        attempt = 0
-        while self._running:
-            try:
-                self._sec_consumer.start_consuming(on_message)
+                logger.error(f"Error inesperado en {self.__class__.__name__}: {e}")
                 break
-            except MessageMiddlewareDisconnectedError:
-                if not self._running:
-                    break
-                logger.error("Conexion perdida con RabbitMQ")
-                self._close_sec_resources()
-                _wait_for_rabbitmq()
-                self._reconnect_backoff(attempt)
-                self._sec_consumer = self._create_sec_consumer()
-                attempt += 1
-            finally:
-                if not self._running:
-                    self._close_sec_resources()
 
     def _create_main_consumer(self):
         if self.main_input_exchange and self.shard_id >= 0:
@@ -784,7 +712,6 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                          checkpoints_sec,
                          ):
         logging.basicConfig(level=logging.INFO)
-        # Shared variables
         self._clients_eof_main_input = clients_eof_main
         self._clients_eof_sec_input = clients_eof_sec
         self._clients_joined = clients_joined
@@ -797,12 +724,10 @@ class WorkerBaseDoubleIO(HealthCheckServer):
         self._checkpoints_main = checkpoints_main
         self._checkpoints_sec = checkpoints_sec
 
-        # Input
         self.main_input_queue     = os.environ.get("MAIN_INPUT_QUEUE", "")
         self.main_input_exchange  = os.environ.get("MAIN_INPUT_EXCHANGE", "")
         self.shard_id             = int(os.environ.get("SHARD_ID", "-1"))
 
-        # Output
         self.main_output_queue    = os.environ.get("MAIN_OUTPUT_QUEUE", "")
         self.main_output_exchange = os.environ.get("MAIN_OUTPUT_EXCHANGE", "")
         self.main_output_shards   = int(os.environ.get("MAIN_OUTPUT_SHARDS", "1"))
@@ -813,27 +738,22 @@ class WorkerBaseDoubleIO(HealthCheckServer):
         self.sec_output_shards   = int(os.environ.get("SECONDARY_OUTPUT_SHARDS", "1"))
         self._sec_out_buffer: dict = {}
 
-        # Setup connections
-        # Main input
         self._main_consumer = self._create_main_consumer()
 
-        # Main output
-        if self.main_output_exchange and self.main_output_shards > 1:
+        if self.main_output_exchange and self.main_output_shards >= 1:
             self._main_producer = ShardedExchangeProducer(RABBITMQ_HOST, self.main_output_exchange, self.main_output_shards)
         elif self.main_output_queue:
             self._main_producer = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, self.main_output_queue)
         else:
             self._main_producer = None
 
-        # Secondary output
-        if self.sec_output_exchange and self.sec_output_shards > 1:
+        if self.sec_output_exchange and self.sec_output_shards >= 1:
             self._sec_producer = ShardedExchangeProducer(RABBITMQ_HOST, self.sec_output_exchange, self.sec_output_shards)
         elif self.sec_output_queue:
             self._sec_producer = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, self.sec_output_queue)
         else:
             self._sec_producer = None
 
-        # SIGTERM handler
         signal.signal(signal.SIGTERM, self._handle_main_process_sigterm)
 
         self._processed_msgs_file_main = f"/tmp/processed_main_{self.consumer_group}_{self.shard_id}.txt"
@@ -844,7 +764,6 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                     self._processed_msgs_main.add(line.strip())
         self._processed_file_handle_main = open(self._processed_msgs_file_main, "a")
 
-        # Handle inputs
         self.handle_message_main_input()
 
     def run_sec_process(self,
@@ -860,7 +779,6 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                         checkpoints_sec,
                         ):
         logging.basicConfig(level=logging.INFO)
-        # Shared variables
         self._clients_eof_main_input = clients_eof_main
         self._clients_eof_sec_input = clients_eof_sec
         self._clients_joined = clients_joined
@@ -873,44 +791,36 @@ class WorkerBaseDoubleIO(HealthCheckServer):
         self._checkpoints_main = checkpoints_main
         self._checkpoints_sec = checkpoints_sec
 
-        # Input
         self.sec_input_queue     = os.environ.get("SECONDARY_INPUT_QUEUE", "")
         self.sec_input_exchange  = os.environ.get("SECONDARY_INPUT_EXCHANGE", "")
         self.shard_id            = int(os.environ.get("SHARD_ID", "-1"))
 
-        # Main output
         self.main_output_queue    = os.environ.get("MAIN_OUTPUT_QUEUE", "")
         self.main_output_exchange = os.environ.get("MAIN_OUTPUT_EXCHANGE", "")
         self.main_output_shards   = int(os.environ.get("MAIN_OUTPUT_SHARDS", "1"))
         self._main_out_buffer: dict = {}
 
-        # Secondary output
         self.sec_output_queue    = os.environ.get("SECONDARY_OUTPUT_QUEUE", "")
         self.sec_output_exchange = os.environ.get("SECONDARY_OUTPUT_EXCHANGE", "")
         self.sec_output_shards   = int(os.environ.get("SECONDARY_OUTPUT_SHARDS", "1"))
         self._sec_out_buffer: dict = {}
 
-        # Setup connections
-        # Secondary input
         self._sec_consumer = self._create_sec_consumer()
 
-        # Main output
-        if self.main_output_exchange and self.main_output_shards > 1:
+        if self.main_output_exchange and self.main_output_shards >= 1:
             self._main_producer = ShardedExchangeProducer(RABBITMQ_HOST, self.main_output_exchange, self.main_output_shards)
         elif self.main_output_queue:
             self._main_producer = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, self.main_output_queue)
         else:
             self._main_producer = None
 
-        # Secondary output
-        if self.sec_output_exchange and self.sec_output_shards > 1:
+        if self.sec_output_exchange and self.sec_output_shards >= 1:
             self._sec_producer = ShardedExchangeProducer(RABBITMQ_HOST, self.sec_output_exchange, self.sec_output_shards)
         elif self.sec_output_queue:
             self._sec_producer = MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, self.sec_output_queue)
         else:
             self._sec_producer = None
 
-        # SIGTERM handler
         signal.signal(signal.SIGTERM, self._handle_sec_process_sigterm)
         self._processed_msgs_file_sec = f"/tmp/processed_sec_{self.consumer_group}_{self.shard_id}.txt"
         self._processed_msgs_sec = set()
@@ -920,57 +830,58 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                     self._processed_msgs_sec.add(line.strip())
         self._processed_file_handle_sec = open(self._processed_msgs_file_sec, "a")
 
-        # Handle inputs
         self.handle_message_sec_input()
 
 
     def run(self):
         logger.info(f"{self.__class__.__name__} iniciando")
 
-        # Create manager
-        manager = multiprocessing.Manager()
+        ctx = multiprocessing.get_context("fork")
+
+        manager = ctx.Manager()
         clients_eof_main = manager.dict()
         clients_eof_sec = manager.dict()
         clients_joined = manager.dict()
         clients_secondary_ready = manager.dict()
-        eof_lock = multiprocessing.Lock()
-        channel_stages = multiprocessing.Queue()
+        eof_lock = ctx.Lock()
+        channel_stages = ctx.Queue()
         shared_cache = manager.dict()
         shared_pending = manager.dict()
         shared_lock = manager.Lock()
         checkpoints_main = manager.dict()
         checkpoints_sec = manager.dict()
 
-        # Create processes
-        main_process = multiprocessing.Process(
-            target=self.run_main_process, 
-            args=(clients_eof_main, 
-                  clients_eof_sec, 
-                  clients_joined, 
-                  clients_secondary_ready, 
-                  eof_lock, 
-                  channel_stages,
-                  shared_cache,
-                  shared_pending,
-                  shared_lock,
-                  checkpoints_main,
-                  checkpoints_sec,
-                  )
+        main_process = ctx.Process(
+            target=self.run_main_process,
+            args=(
+                clients_eof_main,
+                clients_eof_sec,
+                clients_joined,
+                clients_secondary_ready,
+                eof_lock,
+                channel_stages,
+                shared_cache,
+                shared_pending,
+                shared_lock,
+                checkpoints_main,
+                checkpoints_sec,
+            ),
         )
-        sec_process = multiprocessing.Process(
+        sec_process = ctx.Process(
             target=self.run_sec_process,
-            args=(clients_eof_main, 
-                  clients_eof_sec, 
-                  clients_joined, 
-                  clients_secondary_ready, 
-                  eof_lock, 
-                  channel_stages,
-                  shared_cache,
-                  shared_pending,
-                  shared_lock,
-                  checkpoints_main,
-                  checkpoints_sec,
-                  )
+            args=(
+                clients_eof_main,
+                clients_eof_sec,
+                clients_joined,
+                clients_secondary_ready,
+                eof_lock,
+                channel_stages,
+                shared_cache,
+                shared_pending,
+                shared_lock,
+                checkpoints_main,
+                checkpoints_sec,
+            ),
         )
 
         def _handle_sigterm(*_):
@@ -980,10 +891,8 @@ class WorkerBaseDoubleIO(HealthCheckServer):
 
         signal.signal(signal.SIGTERM, _handle_sigterm)
 
-        # Start processes
         main_process.start()
         sec_process.start()
 
-        # Wait for processes to end
         main_process.join()
         sec_process.join()

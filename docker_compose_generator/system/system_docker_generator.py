@@ -1,4 +1,5 @@
 from .aggregator.aggregator_docker_service import get_aggregator_docker_services
+from .bank_name_adder.bank_name_adder_service import get_bank_name_adders_services
 from .barrier_filter.barrier_filter_docker_service import get_barrier_filters_services
 from .data_reducer.data_reducer_docker_service import get_data_reducer_docker_services
 from .filter.filter_docker_service import get_filters_docker_services
@@ -30,13 +31,6 @@ def generate_system_docker_compose(total_clients=0):
     with open(csv_path, mode="r") as config_file:
         # Get config file reader
         config_file_reader = csv.DictReader(config_file)
-
-        # Create gateway (publica en exchange shardeado)
-        gateway = get_gateway_docker_services(
-            input_query_queue_prefix="results",
-            total_queries=5,
-            output_exchange="gateway_exc",
-        )
         
         usd_prefix, usd_instances = _get_next_config_row(config_file_reader)
         reducer_prefix, reducer_instances = _get_next_config_row(config_file_reader)
@@ -45,6 +39,7 @@ def generate_system_docker_compose(total_clients=0):
         q2_splitter_prefix, q2_splitter_instances = _get_next_config_row(config_file_reader)
         q2_reducer_prefix, q2_reducer_instances = _get_next_config_row(config_file_reader)
         q2_aggregator_prefix, q2_aggregator_instances = _get_next_config_row(config_file_reader)
+        q2_bank_names_adder_prefix, q2_bank_names_adder_instances = _get_next_config_row(config_file_reader)
 
         q3_data_reducer_prefix, q3_data_reducer_instances = _get_next_config_row(config_file_reader)
         q3_filter_06092022_15092022_prefix, q3_filter_06092022_15092022_instances = _get_next_config_row(config_file_reader)
@@ -55,12 +50,12 @@ def generate_system_docker_compose(total_clients=0):
 
         q4_data_reducer_prefix, q4_data_reducer_instances = _get_next_config_row(config_file_reader)
         q4_filter_01092022_05092022_prefix, q4_filter_01092022_05092022_instances = _get_next_config_row(config_file_reader)
-        q4_splitters_by_origin_and_dest_prefix, q4_splitters_by_origin_and_dest_instances = _get_next_config_row(config_file_reader)
-        q4_transaction_graph_prefix, q4_transaction_graph_instances = _get_next_config_row(config_file_reader)
-        q4_graphs_edges_splitters_prefix, q4_graphs_edges_splitters_instances = _get_next_config_row(config_file_reader)
+        q4_splitters_by_origin_and_dest_inc_prefix, q4_splitters_by_origin_and_dest_instances = _get_next_config_row(config_file_reader)
+        q4_inc_edges_filter_prefix, q4_edges_filter_instances = _get_next_config_row(config_file_reader)
+        q4_splitters_by_origin_and_dest_out_prefix, q4_splitters_by_origin_and_dest_instances = _get_next_config_row(config_file_reader)
+        q4_out_edges_filter_prefix, q4_edges_filter_instances = _get_next_config_row(config_file_reader)
         q4_paths_creators_prefix, q4_paths_creators_instances = _get_next_config_row(config_file_reader)
-        q4_paths_splitters_by_ends_prefix, q4_paths_splitters_by_ends_instances = _get_next_config_row(config_file_reader)
-        q4_unique_paths_counters_prefix, q4_unique_paths_counters_instances = _get_next_config_row(config_file_reader)
+        q4_paths_aggregator_prefix, q4_paths_aggregator_instances = _get_next_config_row(config_file_reader)
 
         q5_data_reducer_prefix, q5_data_reducer_instances = _get_next_config_row(config_file_reader)
         q5_filter_01092022_05092022_prefix, q5_filter_01092022_05092022_instances = _get_next_config_row(config_file_reader)
@@ -71,11 +66,20 @@ def generate_system_docker_compose(total_clients=0):
         q5_counter_prefix, q5_counter_instances = _get_next_config_row(config_file_reader)
         q5_totals_sumer_prefix, q5_totals_sumer_instances = _get_next_config_row(config_file_reader)
 
+        # Create gateway
+        gateway = get_gateway_docker_services(
+            input_query_queue_prefix="results",
+            total_queries=5,
+            output_exchange="gateway_exc",
+            banks_out_exch="q2_banks_exchange",
+        )
+
         gateway["gateway"]["environment"].append(f"OUTPUT_SHARDS={usd_instances}")
+        gateway["gateway"]["environment"].append(f"BANK_OUTPUT_SHARDS={q2_bank_names_adder_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_1_N_UPSTREAM={filter_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_2_N_UPSTREAM={q2_aggregator_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_3_N_UPSTREAM={q3_avg_and_transactions_joiner_instances}")
-        gateway["gateway"]["environment"].append(f"QUERY_4_N_UPSTREAM={q4_unique_paths_counters_instances}")
+        gateway["gateway"]["environment"].append(f"QUERY_4_N_UPSTREAM={q4_paths_aggregator_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_5_N_UPSTREAM={q5_totals_sumer_instances}")
         gateway["gateway"]["environment"].append(
             "TRANSACTION_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1,"
@@ -117,7 +121,7 @@ def generate_system_docker_compose(total_clients=0):
             total_clients=total_clients,
         )
         for name, config in q1_50_usd_filters.items():
-            config["environment"].append("BATCH_SIZE=5000")
+            config["environment"].append("BATCH_SIZE=2000")
         system = system | q1_50_usd_filters
 
         # =========================================================
@@ -151,15 +155,26 @@ def generate_system_docker_compose(total_clients=0):
         q2_aggregators = get_aggregator_docker_services(
             q2_aggregator_prefix, q2_aggregator_instances,
             input_exchange="q2_reduced_exc",
-            output_queue="results_2",
+            output_exchange="q2_results_formatter",
             agg_op="max", agg_field="Amount Paid", key_field="From Bank",
             carry_fields=["Account"],
             n_upstream=q2_reducer_instances,
             total_clients=total_clients,
         )
         for name, config in q2_aggregators.items():
-            config["environment"].append("BATCH_SIZE=5000")
+            config["environment"].append("BATCH_SIZE=2000")
+            config["environment"].append(f"OUTPUT_SHARDS={q2_bank_names_adder_instances}")
         system = system | q2_aggregators
+
+        q2_bank_names_adders = get_bank_name_adders_services(
+            q2_bank_names_adder_prefix, q2_bank_names_adder_instances,
+            main_input_exchange="q2_results_formatter",
+            main_n_upstream=q2_aggregator_instances,
+            sec_input_exchange="q2_banks_exchange",
+            sec_n_upstream=1,
+            sec_output_queue="results_2",
+        )
+        system = system | q2_bank_names_adders
 
         # =========================================================
         # QUERY 3
@@ -234,7 +249,7 @@ def generate_system_docker_compose(total_clients=0):
             output_queue="results_3",
         )
         for name, config in q3_avg_and_transactions_joiner.items():
-            config["environment"].append("BATCH_SIZE=10000")
+            config["environment"].append("BATCH_SIZE=2000")
         system = system | q3_avg_and_transactions_joiner
 
         # =========================================================
@@ -254,72 +269,92 @@ def generate_system_docker_compose(total_clients=0):
 
         # Filter dates between 01/09/2022 and 05/09/2022 included
         q4_filters_01092022_05092022 = get_filters_docker_services(
-            q4_filter_01092022_05092022_prefix, q4_filter_01092022_05092022_instances,
+            q4_filter_01092022_05092022_prefix,
+            q4_filter_01092022_05092022_instances,
             filter_field="Timestamp", filter_op="in", filter_value='["2022/09/01", "2022/09/05"]',
             input_exchange="q4_reduced_data_exc",
-            output_exchange="q4_splitter_exc",
+            output_exchange="q4_splitters_exc",
             n_upstream=q4_data_reducer_instances,
             output_shards=q4_splitters_by_origin_and_dest_instances,
         )
         system = system | q4_filters_01092022_05092022
 
-        # Split by origin account so each worker can count distinct destinations.
+        # Outgoing edges
+        ## Split by origin account so each worker can count distinct destinations for outgoing transactions.
         q4_splitters_by_origin_and_dest = get_splitter_docker_services(
-            q4_splitters_by_origin_and_dest_prefix, q4_splitters_by_origin_and_dest_instances,
-            input_exchange="q4_splitter_exc",
-            output_exchange="q4_split_by_origin_and_dest_exc",
+            q4_splitters_by_origin_and_dest_out_prefix,
+            q4_splitters_by_origin_and_dest_instances,
+            input_exchange="q4_splitters_exc",
+            output_exchange="q4_out_edges_filter_exc",
             key_fields=["From Bank", "Account"],
             n_upstream=q4_filter_01092022_05092022_instances,
-            output_shards=q4_transaction_graph_instances,
+            output_shards=q4_edges_filter_instances,
         )
         system = system | q4_splitters_by_origin_and_dest
 
-        # Create subgraphs of transactions
+        ## Create outgoing edges filter
         q4_transactions_graphs = get_scatter_gather_services(
-            q4_transaction_graph_prefix, q4_transaction_graph_instances,
-            "sub_graph_agg",
-            input_exchange="q4_split_by_origin_and_dest_exc",
-            output_exchange="q4_edges_exc",
+            q4_out_edges_filter_prefix,
+            q4_edges_filter_instances,
+            "out_edges_filter",
+            input_exchange="q4_out_edges_filter_exc",
+            output_exchange="q4_candidates_edges_exc",
             n_upstream=q4_splitters_by_origin_and_dest_instances,
             output_shards=q4_paths_creators_instances,
         )
         system = system | q4_transactions_graphs
 
+        # Incoming edges
+        ## Split by origin account so each worker can count distinct destinations for incoming transactions.
+        q4_splitters_by_origin_and_dest = get_splitter_docker_services(
+            q4_splitters_by_origin_and_dest_inc_prefix,
+            q4_splitters_by_origin_and_dest_instances,
+            input_exchange="q4_splitters_exc",
+            output_exchange="q4_inc_edges_filter_exc",
+            key_fields=["To Bank", "Account.1"],
+            n_upstream=q4_filter_01092022_05092022_instances,
+            output_shards=q4_edges_filter_instances,
+        )
+        system = system | q4_splitters_by_origin_and_dest
+
+        ## Create incoming edges filter
+        q4_inc_edges_filters = get_scatter_gather_services(
+            q4_inc_edges_filter_prefix,
+            q4_edges_filter_instances,
+            "inc_edges_filter",
+            input_exchange="q4_inc_edges_filter_exc",
+            output_exchange="q4_candidates_edges_exc",
+            n_upstream=q4_splitters_by_origin_and_dest_instances,
+            output_shards=q4_paths_creators_instances,
+        )
+        system = system | q4_inc_edges_filters
+
         # Paths creators
+        q4_total_edges_filters = 2*q4_edges_filter_instances
         q4_paths_creators = get_scatter_gather_services(
-            q4_paths_creators_prefix, q4_paths_creators_instances,
+            q4_paths_creators_prefix,
+            q4_paths_creators_instances,
             "paths_creator",
-            input_exchange="q4_edges_exc",
+            input_exchange="q4_candidates_edges_exc",
             output_exchange="q4_paths_exc",
-            n_upstream=q4_transaction_graph_instances,
-            output_shards=q4_paths_splitters_by_ends_instances,
+            n_upstream=q4_total_edges_filters,
+            output_shards=q4_paths_aggregator_instances,
         )
         system = system | q4_paths_creators
 
-        # Split by origin and destination nodes
-        q4_paths_splitters_by_ends = get_splitter_docker_services(
-            q4_paths_splitters_by_ends_prefix, q4_paths_splitters_by_ends_instances,
-            input_exchange="q4_paths_exc",
-            output_exchange="q4_unique_paths_counter_exc",
-            key_fields=["From Bank", "Account", "To Bank", "Account.1"],
-            n_upstream=q4_paths_creators_instances,
-            output_shards=q4_unique_paths_counters_instances
-        )
-        system = system | q4_paths_splitters_by_ends
-
         # Unique paths counters
-        q4_unique_paths_counters = get_scatter_gather_services(
-            q4_unique_paths_counters_prefix,
-            q4_unique_paths_counters_instances,
+        q4_paths_aggregator = get_scatter_gather_services(
+            q4_paths_aggregator_prefix,
+            q4_paths_aggregator_instances,
             "unique_paths_count",
-            input_exchange="q4_unique_paths_counter_exc",
+            input_exchange="q4_paths_exc",
             output_queue="results_4",
-            n_upstream=q4_paths_splitters_by_ends_instances,
+            n_upstream=q4_paths_creators_instances,
             total_clients=total_clients,
         )
-        for name, config in q4_unique_paths_counters.items():
+        for name, config in q4_paths_aggregator.items():
             config["environment"].append("BATCH_SIZE=1000")
-        system = system | q4_unique_paths_counters
+        system = system | q4_paths_aggregator
 
         # =========================================================
         # QUERY 5
@@ -357,19 +392,9 @@ def generate_system_docker_compose(total_clients=0):
             sec_n_upstream=q5_money_converter_api_client_instances,
         )
         for name, config in q5_money_converters.items():
-            config.pop("container_name", None)
-            shard_id = int(name.rsplit("_", 1)[-1])
-            config["environment"] = [
-                "HEALTH_PORT=8888",
-                "RABBITMQ_HOST=rabbitmq",
-                "TARGET_CURRENCY=US Dollar",
-                "INPUT_EXCHANGE=q5_converter_to_usd_exc",
-                "CONSUMER_GROUP=q5_money_converter",
-                f"SHARD_ID={shard_id}",
-                "N_UPSTREAM=3",
-                "OUTPUT_EXCHANGE=q5_converted_amounts_exc",
-                "OUTPUT_SHARDS=3",
-            ]
+            config["environment"].append("BATCH_SIZE=1")
+            config["environment"].append("SEC_BATCH_SIZE=2000")
+            config["environment"].append(f"SECONDARY_OUTPUT_SHARDS={q5_filter_lt_1_usd_instances}")
         system = system | q5_money_converters
 
         q5_money_converters_api_client = get_money_conversion_api_client_docker_services(
@@ -379,8 +404,6 @@ def generate_system_docker_compose(total_clients=0):
             output_shards=q5_money_converters_instances,
             n_upstream=q5_money_converters_instances,
         )
-        for config in q5_money_converters_api_client.values():
-            config.pop("container_name", None)
         system = system | q5_money_converters_api_client
 
         # Filter of less than 1 USD
@@ -427,105 +450,74 @@ def generate_system_docker_compose(total_clients=0):
             total_clients=total_clients,
         )
         system = system | q5_totals_sumers
+
+        # --- MONITOR Y CHAOS MONKEY ---
         worker_names = [name for name in system.keys() if name != "rabbitmq"]
         system = system | _get_monitor_services(worker_names)
         system = system | _get_chaos_monkey_service()
+
     return system
-
-
 
 def _get_monitor_services(worker_names):
     workers_value = ",".join(worker_names)
-
     return {
         "monitor_0": {
-            "build": {
-                "context": "./src/monitor",
-            },
-            "depends_on": {
-                "rabbitmq": {
-                    "condition": "service_healthy",
-                }
-            },
+            "build": {"context": "./src/monitor"},
+            "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
             "environment": [
                 "MONITOR_ID=0",
                 "SUCCESSORS=monitor_1,monitor_2",
                 "HEALTH_PORT=8888",
                 "CHECK_INTERVAL=10",
-                "HEALTH_TIMEOUT=5",
+                "HEALTH_TIMEOUT=50",
                 "MAX_FAILURES=4",
                 f"WORKERS={workers_value}",
             ],
-            "volumes": [
-                "/var/run/docker.sock:/var/run/docker.sock",
-            ],
+            "volumes": ["/var/run/docker.sock:/var/run/docker.sock"],
             "restart": "unless-stopped",
         },
         "monitor_1": {
-            "build": {
-                "context": "./src/monitor",
-            },
-            "depends_on": {
-                "rabbitmq": {
-                    "condition": "service_healthy",
-                }
-            },
+            "build": {"context": "./src/monitor"},
+            "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
             "environment": [
                 "MONITOR_ID=1",
                 "SUCCESSORS=monitor_2,monitor_0",
                 "HEALTH_PORT=8888",
                 "CHECK_INTERVAL=10",
-                "HEALTH_TIMEOUT=5",
+                "HEALTH_TIMEOUT=50",
                 "MAX_FAILURES=4",
                 f"WORKERS={workers_value}",
             ],
-            "volumes": [
-                "/var/run/docker.sock:/var/run/docker.sock",
-            ],
+            "volumes": ["/var/run/docker.sock:/var/run/docker.sock"],
             "restart": "unless-stopped",
         },
         "monitor_2": {
-            "build": {
-                "context": "./src/monitor",
-            },
-            "depends_on": {
-                "rabbitmq": {
-                    "condition": "service_healthy",
-                }
-            },
+            "build": {"context": "./src/monitor"},
+            "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
             "environment": [
                 "MONITOR_ID=2",
                 "SUCCESSORS=monitor_0,monitor_1",
                 "HEALTH_PORT=8888",
                 "CHECK_INTERVAL=10",
-                "HEALTH_TIMEOUT=5",
+                "HEALTH_TIMEOUT=50",
                 "MAX_FAILURES=4",
                 f"WORKERS={workers_value}",
             ],
-            "volumes": [
-                "/var/run/docker.sock:/var/run/docker.sock",
-            ],
+            "volumes": ["/var/run/docker.sock:/var/run/docker.sock"],
             "restart": "unless-stopped",
         },
     }
 
-
 def _get_chaos_monkey_service():
     return {
         "chaos_monkey": {
-            "build": {
-                "context": "./scripts",
-            },
+            "build": {"context": "./scripts"},
             "environment": [
-                "CHAOS_TARGETS=usd_filter_0,q1_data_reducer_0,q1_filter_lt_50_0,q2_aggregator_0,q2_data_reducer_0,q3_avg_and_transactions_joiner_0,q3_avg_aggregators_preceding_period_0,q4_paths_creators_0,q5_money_converter_0",
+                "CHAOS_TARGETS=usd_filter_0,q1_data_reducer_0,q2_aggregator_0,q2_banks_name_adder_0,q3_avg_and_transactions_joiner_0,q4_inc_edges_filter_0,q4_paths_creators_0,q5_money_converter_0",
                 "CHAOS_INTERVAL=30",
                 "CHAOS_MIN_WAIT=30",
             ],
-            "volumes": [
-                "/var/run/docker.sock:/var/run/docker.sock",
-            ],
-            "profiles": [
-                "chaos",
-            ],
+            "volumes": ["/var/run/docker.sock:/var/run/docker.sock"],
+            "profiles": ["chaos"],
         }
     }
