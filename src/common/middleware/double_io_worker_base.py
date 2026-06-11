@@ -172,6 +172,9 @@ class WorkerBaseDoubleIO(HealthCheckServer):
     def on_secondary_ready(self, client_id=None) -> list:
         return []
 
+    def waits_for_both_pipeline_eofs(self) -> bool:
+        return False
+
     def _routing_key(self, msg: dict) -> str:
         """Clave de particion del mensaje. Override en Splitter."""
         return "__queue__"
@@ -351,6 +354,9 @@ class WorkerBaseDoubleIO(HealthCheckServer):
 
     def _execute_eof_main_input(self, client_id=None):
         if self._operation_mode == "PIPELINE":
+            if self.waits_for_both_pipeline_eofs():
+                self._execute_pipeline_both_eofs(client_id)
+                return
             if self._clients_eof_main_input[client_id] >= self.main_n_upstream:
                 for result in self.on_main_input_eof(client_id):
                     self._emit_results_main_stage(result)
@@ -379,6 +385,9 @@ class WorkerBaseDoubleIO(HealthCheckServer):
    
     def _execute_eof_sec_input(self, client_id=None):
         if self._operation_mode == "PIPELINE":
+            if self.waits_for_both_pipeline_eofs():
+                self._execute_pipeline_both_eofs(client_id)
+                return
             if self._clients_eof_sec_input[client_id] >= self.sec_n_upstream:
                 for result in self.on_secondary_input_eof(client_id):
                     self._emit_sec_output([result])
@@ -407,6 +416,30 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                         self._emit_main_output([result])
                     self._flush_all_main_buffer()
                     self._send_main_output_eof(client_id)
+
+    def _execute_pipeline_both_eofs(self, client_id=None):
+        with self._eof_lock:
+            if self._clients_joined.get(client_id, False):
+                return
+
+            main_ready = self._clients_eof_main_input.get(client_id, 0) >= self.main_n_upstream
+            sec_ready = self._clients_eof_sec_input.get(client_id, 0) >= self.sec_n_upstream
+            if not main_ready or not sec_ready:
+                return
+
+            self._clients_joined[client_id] = True
+
+            for result in self.on_main_input_eof(client_id):
+                self._emit_results_main_stage([result])
+            for result in self.on_secondary_input_eof(client_id):
+                self._emit_sec_output([result])
+
+            self._flush_all_next_stage()
+
+            if self.main_eof_dest in ["MAIN", "BOTH"] or self.sec_eof_dest in ["MAIN", "BOTH"]:
+                self._send_main_output_eof(client_id)
+            if self.main_eof_dest in ["SECONDARY", "BOTH"] or self.sec_eof_dest in ["SECONDARY", "BOTH"]:
+                self._send_sec_output_eof(client_id)
 
     # --- Loop principal ---------------------------------------------------------
 
@@ -735,7 +768,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
 
         self.sec_output_queue    = os.environ.get("SECONDARY_OUTPUT_QUEUE", "")
         self.sec_output_exchange = os.environ.get("SECONDARY_OUTPUT_EXCHANGE", "")
-        self.sec_output_shards   = int(os.environ.get("SECONDARY_OUTPUT_SHARDS", "1"))
+        self.sec_output_shards   = int(os.environ.get("SEC_OUTPUT_SHARDS", os.environ.get("SECONDARY_OUTPUT_SHARDS", "1")))
         self._sec_out_buffer: dict = {}
 
         self._main_consumer = self._create_main_consumer()
@@ -802,7 +835,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
 
         self.sec_output_queue    = os.environ.get("SECONDARY_OUTPUT_QUEUE", "")
         self.sec_output_exchange = os.environ.get("SECONDARY_OUTPUT_EXCHANGE", "")
-        self.sec_output_shards   = int(os.environ.get("SECONDARY_OUTPUT_SHARDS", "1"))
+        self.sec_output_shards   = int(os.environ.get("SEC_OUTPUT_SHARDS", os.environ.get("SECONDARY_OUTPUT_SHARDS", "1")))
         self._sec_out_buffer: dict = {}
 
         self._sec_consumer = self._create_sec_consumer()

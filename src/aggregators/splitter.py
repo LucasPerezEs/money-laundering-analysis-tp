@@ -6,6 +6,7 @@ Stateless: escala libremente.
 Variables de entorno:
   SHARD_KEY_FIELD: campo del mensaje usado como clave de sharding
   SHARD_KEY_FIELDS: campos separados por coma (se concatenan como clave)
+  NORMALIZE_NUMERIC_KEY: quita ceros iniciales de SHARD_KEY_FIELD
   TAG_SOURCE: si se define, agrega {"source": TAG_SOURCE} a cada msg
 """
 import logging

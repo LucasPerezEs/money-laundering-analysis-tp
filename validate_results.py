@@ -89,7 +89,7 @@ def to_usd(amount, currency, timestamp):
     if code == "BTC":
         day = parse_date(timestamp).isoformat()
         rate = _get_btc_rate(day)
-        return amount * rate if rate else None
+        return amount / rate if rate else None
     day = parse_date(timestamp).isoformat()
     rate = get_rate(code, day)
     return amount * rate if rate else None
@@ -133,7 +133,8 @@ def load_accounts(path):
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for r in reader:
-            mapping[r["Bank ID"]] = r["Bank Name"]
+            bank_id = str(r["Bank ID"]).strip().lstrip("0") or "0"
+            mapping[bank_id] = r["Bank Name"]
     print(f"  {len(mapping)} cuentas cargadas")
     return mapping
 
@@ -157,24 +158,31 @@ def serial_q2(rows, accounts):
     for r in rows:
         if r["payment_currency"] != "US Dollar":
             continue
-        raw_bank_id = r["from_bank"]
-        bank_id = str(raw_bank_id).strip()
-        normalized_bank_id = bank_id.lstrip("0") or "0"
-        bank_name = accounts.get(bank_id)
-        if bank_name is None:
-            bank_name = accounts.get(normalized_bank_id, raw_bank_id)
+        bank_id = str(r["from_bank"]).strip().lstrip("0") or "0"
         if bank_id not in best or r["amount"] > best[bank_id]["amount"]:
             best[bank_id] = {
-                "bank_name":    bank_name,
+                "from_bank":    bank_id,
                 "from_account": r["from_account"],
                 "amount":       r["amount"],
             }
-    return list(best.values())
+
+    results = []
+    for bank_id, row in best.items():
+        bank_name = accounts.get(bank_id)
+        if bank_name is None:
+            continue
+        results.append({
+            "from_bank": row["from_bank"],
+            "from_account": row["from_account"],
+            "bank_name": bank_name,
+            "amount": row["amount"],
+        })
+    return results
 
 def serial_q3(rows):
     usd = [r for r in rows if r["payment_currency"] == "US Dollar"]
     period_a = [r for r in usd if in_period(r["timestamp"], "2022-09-01", "2022-09-05")]
-    period_b = [r for r in usd if in_period(r["timestamp"], "2022-09-06", "2022-09-15")]
+    period_b = [r for r in usd if in_period(r["timestamp"], "2022-09-06", "2022-09-14")]
     acc = defaultdict(lambda: {"s": 0.0, "n": 0})
     for r in period_a:
         acc[r["payment_format"]]["s"] += r["amount"]

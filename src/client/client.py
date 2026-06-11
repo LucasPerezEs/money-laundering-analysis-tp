@@ -95,29 +95,97 @@ class Client:
             if filename.startswith("results_q") and filename.endswith(".csv"):
                 os.remove(os.path.join(output_dir, filename))
 
-    # ACK con traceback    
+
+    def _write_query_results(self, query_id, rows):
+        """Persiste los lotes multiplexados en modo append para no bloquear el hilo principal."""
+        import os
+        import csv
+
+        output_dir = os.path.join(self.results_dir, f"client_{self.client_id}")
+        os.makedirs(output_dir, exist_ok=True)
+        file_path = os.path.join(output_dir, f"results_q{query_id}.csv")
+        
+        # Guardamos la referencia para cerrarlo correctamente al final
+        if query_id not in self._writers:
+            csvfile = open(file_path, "a", newline="")
+            self._writers[query_id] = (csvfile, csv.writer(csvfile))
+        
+        _, csv_writer = self._writers[query_id]
+        csv_writer.writerows(rows)
+
+    def _close_query_writer(self, query_id):
+        """Cierra el file descriptor cuando llega el END_QUERY."""
+        if query_id in self._writers:
+            csvfile, _ = self._writers.pop(query_id)
+            csvfile.close()
+        else:
+            # Garantiza la creación del archivo si la query devolvió 0 resultados
+            output_dir = os.path.join(self.results_dir, f"client_{self.client_id}")
+            os.makedirs(output_dir, exist_ok=True)
+            file_path = os.path.join(output_dir, f"results_q{query_id}.csv")
+            open(file_path, "a").close()
+
     def _expect_ack(self):
         try:
-            msg_type, payload = message_protocol.external.recv_msg(
-                self.server_socket
-            )
+            while True:
+                msg_type, payload = message_protocol.external.recv_msg(self.server_socket)
 
-            if msg_type != message_protocol.external.MsgType.ACK:
-                raise TypeError(f"Expected ACK, got {msg_type}")
+                if msg_type == message_protocol.external.MsgType.ACK:
+                    if payload != self.client_id:
+                        raise ValueError(f"Client id mismatch in ACK (got={payload}, expected={self.client_id})")
+                    return # ACK de nuestra subida recibido, continuamos
 
-            if payload != self.client_id:
-                raise ValueError(
-                    f"Client id mismatch in ACK "
-                    f"(got={payload}, expected={self.client_id})"
-                )
+                elif msg_type == message_protocol.external.MsgType.QUERY_RESULT_BATCH:
+                    msg_client_id, query_id, rows = payload
+                    logging.info(f"Multiplexed: Received batch of {len(rows)} rows for query {query_id}")
+                    self._write_query_results(query_id, rows)
+                    message_protocol.external.send_msg(self.server_socket, message_protocol.external.MsgType.ACK, self.client_id)
 
-            logging.debug("Received ACK from gateway")
+                elif msg_type == message_protocol.external.MsgType.END_QUERY:
+                    msg_client_id, query_id = payload
+                    logging.info(f"Multiplexed: Received end of results for query {query_id}")
+                    self._close_query_writer(query_id)
+                    message_protocol.external.send_msg(self.server_socket, message_protocol.external.MsgType.ACK, self.client_id)
+                
+                elif msg_type == message_protocol.external.MsgType.END_RESULTS:
+                    logging.info(f"Multiplexed: Received end of ALL results from gateway")
+                    message_protocol.external.send_msg(self.server_socket, message_protocol.external.MsgType.ACK, self.client_id)
+
+                else:
+                    raise TypeError(f"Expected ACK or Result, got MsgType {msg_type}")
 
         except Exception as e:
             logging.error(f"ACK failure: {e}")
             logging.error(traceback.format_exc())
             raise
 
+    def recv_query_results(self):
+        logging.info("Receiving remaining query results")
+        while True:
+            msg_type, payload = message_protocol.external.recv_msg(self.server_socket)
+
+            if msg_type == message_protocol.external.MsgType.QUERY_RESULT_BATCH:
+                msg_client_id, query_id, rows = payload
+                logging.info(f"Received batch of {len(rows)} rows for query {query_id} from gateway")
+                self._write_query_results(query_id, rows)
+                message_protocol.external.send_msg(self.server_socket, message_protocol.external.MsgType.ACK, self.client_id)
+
+            elif msg_type == message_protocol.external.MsgType.END_QUERY:
+                msg_client_id, query_id = payload
+                logging.info(f"Received end of results for query {query_id} from gateway")
+                self._close_query_writer(query_id)
+                message_protocol.external.send_msg(self.server_socket, message_protocol.external.MsgType.ACK, self.client_id)
+
+            elif msg_type == message_protocol.external.MsgType.END_RESULTS:
+                logging.info(f"Received end of all results from gateway for client {self.client_id}")
+                message_protocol.external.send_msg(self.server_socket, message_protocol.external.MsgType.ACK, self.client_id)
+                break
+
+            else:
+                raise TypeError(f"Unexpected message type: {msg_type}")
+
+        self._close_writers()
+            
     def _send_csv_batch(self, msg_type, csv_buffer, row_count):
         logging.debug(f"Sending batch of {row_count} rows to gateway")
         message_protocol.external.send_client_csv_batch(
@@ -208,75 +276,6 @@ class Client:
         )
         self._expect_ack()
 
-    def recv_query_results(self):
-        logging.info("Receiving query results")
-        output_dir = os.path.join(self.results_dir, f"client_{self.client_id}")
-        os.makedirs(output_dir, exist_ok=True)
-        self._clear_previous_results(output_dir)
-
-        while True:
-            msg_type, payload = message_protocol.external.recv_msg(self.server_socket)
-
-            if msg_type == message_protocol.external.MsgType.QUERY_RESULT_BATCH:
-                msg_client_id, query_id, rows = payload
-                if msg_client_id != self.client_id:
-                    raise ValueError("Client id mismatch in query result batch")
-
-                logging.info(f"Received batch of {len(rows)} rows for query {query_id} from gateway")
-
-                if query_id not in self._writers:
-                    file_path = os.path.join(
-                        output_dir, f"results_q{query_id}.csv"
-                    )
-                    csvfile = open(file_path, "w", newline="")
-                    self._writers[query_id] = (csvfile, csv.writer(csvfile))
-
-                _, csv_writer = self._writers[query_id]
-                csv_writer.writerows(rows)
-                message_protocol.external.send_msg(
-                    self.server_socket,
-                    message_protocol.external.MsgType.ACK,
-                    self.client_id,
-                )
-                continue
-
-            if msg_type == message_protocol.external.MsgType.END_QUERY:
-                msg_client_id, query_id = payload
-                if msg_client_id != self.client_id:
-                    raise ValueError("Client id mismatch in end query")
-                
-                logging.info(f"Received end of results for query {query_id} from gateway")
-                
-                if query_id in self._writers:
-                    csvfile, _ = self._writers.pop(query_id)
-                    csvfile.close()
-                else:
-                    # Si la query tuvo 0 resultados lo creamos vacío.
-                    file_path = os.path.join(output_dir, f"results_q{query_id}.csv")
-                    open(file_path, "w").close()
-                message_protocol.external.send_msg(
-                    self.server_socket,
-                    message_protocol.external.MsgType.ACK,
-                    self.client_id,
-                )
-                continue
-
-            if msg_type == message_protocol.external.MsgType.END_RESULTS:
-                if payload != self.client_id:
-                    raise ValueError("Client id mismatch in end results")
-                
-                logging.info(f"Received end of all results from gateway for client {self.client_id}")
-                
-                message_protocol.external.send_msg(
-                    self.server_socket,
-                    message_protocol.external.MsgType.ACK,
-                    self.client_id,
-                )
-                break
-
-            raise TypeError(f"Unexpected message type: {msg_type}")
-
-        self._close_writers()
 
     def run(self):
         try:

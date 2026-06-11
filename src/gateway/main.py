@@ -46,7 +46,6 @@ def main():
 
     # Diccionarios estándar y el Lock
     client_sockets = {}
-    client_ready_events = {}
     client_query_eofs = {}
     client_outboxes = {}
     client_checkpoints = {}
@@ -97,7 +96,6 @@ def main():
                 args=(
                     client_socket,
                     client_sockets,
-                    client_ready_events,
                     client_outboxes,
                     MOM_HOST,
                     OUTPUT_QUEUE,

@@ -6,6 +6,7 @@ import time
 import requests
 
 from common.middleware.worker_base import WorkerBase
+from common.middleware.double_io_worker_base import WorkerBaseDoubleIO
 
 TARGET_CURRENCY_TAG = "TARGET_CURRENCY"
 BTC_RATES_PATH_TAG = "BTC_RATES_PATH"
@@ -20,13 +21,17 @@ CURRENCY_CODES = {
 }
 
 
-class MoneyConverter(WorkerBase):
+class MoneyConverter(WorkerBaseDoubleIO):
+    def waits_for_both_pipeline_eofs(self) -> bool:
+            return True
 
     def __init__(self):
         super().__init__()
         self._target_currency = os.environ[TARGET_CURRENCY_TAG]
         self._rates = {}
         self._btc_rates = self._load_btc_rates()
+        self._currency_rates_by_date = {}
+        self._local_pending = {}
 
     def _load_btc_rates(self):
         path = os.environ.get(BTC_RATES_PATH_TAG, "/btc_rates.csv")
@@ -60,39 +65,134 @@ class MoneyConverter(WorkerBase):
                 if attempt < 2:
                     time.sleep(2 ** attempt)
         return None
+    
+    def _generate_consult_currency_rate(self, day, origin_code, target_code):
+        """
+        Genera el diccionario de petición para que money_converter_api.py consulte a Frankfurter.
+        Omitimos la key 'Type' intencionalmente para que el cliente API lo procese como petición válida.
+        """
+        return {
+            "timestamp": day,
+            "origin": origin_code,
+            "destination": target_code,
+            "sender_id": str(self.shard_id)
+        }
 
-    def process(self, data: dict) -> list:
+    def _log_conversion(self, day, origin, target, amount_in, rate, amount_out):
+        """Utilidad de logging requerida por el flujo de proceso principal y secundario."""
+        logging.debug(f"Conversión procesada: {amount_in} {origin} -> {amount_out} {target} (Rate: {rate}) en {day}")
+
+    def process_main_input(self, data: dict) -> tuple[list, list]:
         data_copy = data.copy()
         day = str(data["Timestamp"]).split(" ")[0].replace("/", "-")
         origin_code = CURRENCY_CODES.get(data["Payment Currency"], data["Payment Currency"])
         target_code = CURRENCY_CODES.get(self._target_currency, self._target_currency)
+        
+        rate_key = f"{day}_{origin_code}_{target_code}"
 
         if origin_code == target_code:
             data_copy["Payment Currency"] = self._target_currency
-            return [data_copy]
+            return ([], [data_copy])
 
         if origin_code == "BTC" and target_code == "USD":
             rate = self._btc_rates.get(day)
             if rate is None:
-                return []
-            data_copy["Amount Paid"] = float(data["Amount Paid"]) * rate
+                logging.info("BTC rate no disponible para %s", day)
+                return ([], [])
             data_copy["Payment Currency"] = self._target_currency
-            return [data_copy]
+            data_copy["Amount Paid"] = float(data["Amount Paid"]) * rate
+            
+            # self._log_conversion(day, origin_code, target_code, data["Amount Paid"], rate, data_copy["Amount Paid"])
+            return ([], [data_copy])
 
-        rate = self._fetch_rate(day, origin_code, target_code)
-        if rate is None:
-            return []
+        if day in self._currency_rates_by_date and (origin_code, target_code) in self._currency_rates_by_date[day]:
+            rate = self._currency_rates_by_date[day][(origin_code, target_code)]
+            data_copy["Payment Currency"] = self._target_currency
+            data_copy["Amount Paid"] = float(data["Amount Paid"]) * rate
+            # self._log_conversion(day, origin_code, target_code, data["Amount Paid"], rate, data_copy["Amount Paid"])
+            return ([], [data_copy])
 
-        data_copy["Amount Paid"] = float(data["Amount Paid"]) * rate
-        data_copy["Payment Currency"] = self._target_currency
-        return [data_copy]
+        if not hasattr(self, "_local_pending"):
+            self._local_pending = {}
 
-    def on_eof(self, client_id=None):
+        with self._shared_lock:
+            if rate_key in self._shared_cache:
+                rate = self._shared_cache[rate_key]
+
+                self._currency_rates_by_date.setdefault(day, {})
+                self._currency_rates_by_date[day][(origin_code, target_code)] = rate
+                data_copy["Payment Currency"] = self._target_currency
+                data_copy["Amount Paid"] = float(data["Amount Paid"]) * rate
+                # self._log_conversion(day, origin_code, target_code, data["Amount Paid"], rate, data_copy["Amount Paid"])
+                return ([], [data_copy])
+            
+            else:
+                is_first_request = False
+                if rate_key not in self._shared_pending and rate_key not in self._local_pending:
+                    is_first_request = True
+
+                self._local_pending.setdefault(rate_key, []).append(data_copy)
+
+                if len(self._local_pending[rate_key]) >= 100:
+                    pending_list = self._shared_pending.get(rate_key, [])
+                    pending_list.extend(self._local_pending.pop(rate_key))
+                    self._shared_pending[rate_key] = pending_list
+
+        if is_first_request:
+            req = self._generate_consult_currency_rate(day, origin_code, target_code)
+            return ([req], [])
+
+        return ([], [])
+
+
+    def process_secondary_input(self, data: dict) -> tuple[list, list]:
+        new_data_list = []
+
+        if "Type" not in data:
+            day = data["timestamp"]
+            origin_code = data["origin"]
+            target_code = data["destination"]
+            currency_rate = data["conversion_rate"]
+            rate_key = f"{day}_{origin_code}_{target_code}"
+
+            with self._shared_lock:
+                self._shared_cache[rate_key] = currency_rate
+                pending_txs = self._shared_pending.pop(rate_key, [])
+
+            for row in pending_txs:
+                amount_in = row["Amount Paid"]
+                amount_out = currency_rate * float(amount_in)
+                row["Amount Paid"] = str(amount_out)
+                row["Payment Currency"] = self._target_currency
+                # self._log_conversion(day, origin_code, target_code, amount_in, currency_rate, amount_out)
+                new_data_list.append(row)
+
+        return ([], new_data_list)
+
+    def on_main_input_eof(self, client_id=None) -> list:
+        if hasattr(self, "_local_pending") and self._local_pending:
+            with self._shared_lock:
+                for rate_key, rows in self._local_pending.items():
+                    if rate_key in self._shared_cache:
+                        rate = self._shared_cache[rate_key]
+                        out_rows = []
+                        for row in rows:
+                            row["Payment Currency"] = self._target_currency
+                            row["Amount Paid"] = float(row["Amount Paid"]) * rate
+                            out_rows.append(row)
+                        self._emit_sec_output(out_rows)
+
+                    else:
+                        pending_list = self._shared_pending.get(rate_key, [])
+                        pending_list.extend(rows)
+                        self._shared_pending[rate_key] = pending_list
+
+            self._local_pending.clear()
+            
         return []
-
-
+    
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    MoneyConverter().run()
-
-
+    logger = logging.getLogger(__file__)
+    logger.setLevel(logging.INFO)
+    money_converter = MoneyConverter()
+    money_converter.run()

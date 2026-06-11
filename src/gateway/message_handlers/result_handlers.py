@@ -50,10 +50,11 @@ def _normalize_result_rows(rows, query_id, client_id):
             }
             
         elif query_id == 2:
-            # Q2: bank_name, from_account, amount
+            # Q2: from_bank, from_account, bank_name, amount
             mapped = {
-                "bank_name": row.get("Bank Name", ""),
+                "from_bank": row.get("From Bank", ""),
                 "from_account": row.get("Account", ""),
+                "bank_name": row.get("Bank Name", ""),
                 "amount": row.get("Amount Paid", 0),
             }
         

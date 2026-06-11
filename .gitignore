@@ -3,7 +3,7 @@ __pycache__/
 
 # Datasets
 datasets/*
-venv
+
 # Results
 results/*
-expected_results/*
+expected_results/LI_*/*.Identifier
