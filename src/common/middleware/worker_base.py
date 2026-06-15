@@ -338,9 +338,6 @@ class WorkerBase(HealthCheckServer):
                         self._send_eof(client_id)
                         done_clients.add(client_id)
 
-                    if self.total_clients > 0 and len(done_clients) >= self.total_clients:
-                        self._consumer.stop_consuming()
-                        logger.info(f"{self.__class__.__name__} terminado por alcanzar total_clients")
                     ack()
                     return
 
@@ -359,9 +356,6 @@ class WorkerBase(HealthCheckServer):
 
                     if i % 100 == 0 and i > 0:
                         self.node_logger.save_batch_state(msg_hash, i, self.last_completed_batch)
-                        self._consumer.process_events()
-                        if self._producer:
-                            self._producer.process_events()
 
                 self.node_logger.save_batch_state(None, 0, msg_hash)
                 self.pending_batch_id = None

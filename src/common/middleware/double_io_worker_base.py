@@ -229,7 +229,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
     # --- Emisión con Buffer y flush --------------------------------------------------------
 
     def _sender_id(self, msg: dict, msg_hash: str) -> str:
-        return msg.get("_worker_node_id") or f"unknown:{msg_hash}"
+        return msg.get("worker_node_id") or f"unknown:{msg_hash}"
 
     def _sender_set(self, mapping, key) -> set:
         value = mapping.get(key, set())
@@ -282,7 +282,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             return
         body = serialize({
             "rows": rows, 
-            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}_main"
+            "worker_node_id": f"{self.consumer_group}_{self.shard_id}_main"
         })
         self._ensure_main_producer()
         try:
@@ -308,7 +308,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             return
         body = serialize({
             "rows": rows, 
-            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}_sec"
+            "worker_node_id": f"{self.consumer_group}_{self.shard_id}_sec"
         })
         self._ensure_sec_producer()
         try:
@@ -347,7 +347,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             "type": "checkpoint", 
             "client_id": client_id, 
             "checkpoint_id": checkpoint_id,
-            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}_main"
+            "worker_node_id": f"{self.consumer_group}_{self.shard_id}_main"
         }
         chk_body = serialize(chk_msg)
         self._ensure_main_producer()
@@ -370,7 +370,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             "type": "checkpoint", 
             "client_id": client_id, 
             "checkpoint_id": checkpoint_id,
-            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}_sec"
+            "worker_node_id": f"{self.consumer_group}_{self.shard_id}_sec"
         }
         chk_body = serialize(chk_msg)
         self._ensure_sec_producer()
@@ -391,7 +391,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             return
         eof_msg = {
             "type": "eof", 
-            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}_main"
+            "worker_node_id": f"{self.consumer_group}_{self.shard_id}_main"
         }
         if client_id is not None:
             eof_msg["client_id"] = client_id
@@ -414,7 +414,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             return
         eof_msg = {
             "type": "eof", 
-            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}_sec"
+            "worker_node_id": f"{self.consumer_group}_{self.shard_id}_sec"
         }
         if client_id is not None:
             eof_msg["client_id"] = client_id
@@ -437,7 +437,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             if self.waits_for_both_pipeline_eofs():
                 self._execute_pipeline_both_eofs(client_id)
                 return
-            if self._clients_eof_main_input[client_id] >= self.main_n_upstream:
+            if self._sender_count(self._clients_eof_main_input, client_id) >= self.main_n_upstream:
                 for result in self.on_main_input_eof(client_id):
                     self._emit_results_main_stage([result])
                 self._flush_all_next_stage()
@@ -451,8 +451,8 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 if self._clients_joined.get(client_id, False):
                     return
 
-                main_ready = self._clients_eof_main_input.get(client_id, 0) >= self.main_n_upstream
-                sec_ready = self._clients_eof_sec_input.get(client_id, 0) >= self.sec_n_upstream
+                main_ready = self._sender_count(self._clients_eof_main_input, client_id) >= self.main_n_upstream
+                sec_ready = self._sender_count(self._clients_eof_sec_input, client_id) >= self.sec_n_upstream
                 
                 if main_ready and sec_ready:
                     self._clients_joined[client_id] = True
@@ -467,7 +467,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             if self.waits_for_both_pipeline_eofs():
                 self._execute_pipeline_both_eofs(client_id)
                 return
-            if self._clients_eof_sec_input[client_id] >= self.sec_n_upstream:
+            if self._sender_count(self._clients_eof_sec_input, client_id) >= self.sec_n_upstream:
                 for result in self.on_secondary_input_eof(client_id):
                     self._emit_sec_output([result])
                 self._flush_all_sec_buffer()
@@ -480,9 +480,9 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             with self._eof_lock:
                 if self._clients_joined.get(client_id, False):
                     return
-                
-                main_ready = self._clients_eof_main_input.get(client_id, 0) >= self.main_n_upstream
-                sec_ready = self._clients_eof_sec_input.get(client_id, 0) >= self.sec_n_upstream
+
+                main_ready = self._sender_count(self._clients_eof_main_input, client_id) >= self.main_n_upstream
+                sec_ready = self._sender_count(self._clients_eof_sec_input, client_id) >= self.sec_n_upstream
                 
                 if sec_ready and not self._clients_secondary_ready.get(client_id, False):
                     self._clients_secondary_ready[client_id] = True
@@ -504,8 +504,8 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             if self._clients_joined.get(client_id, False):
                 return
 
-            main_ready = self._clients_eof_main_input.get(client_id, 0) >= self.main_n_upstream
-            sec_ready = self._clients_eof_sec_input.get(client_id, 0) >= self.sec_n_upstream
+            main_ready = self._sender_count(self._clients_eof_main_input, client_id) >= self.main_n_upstream
+            sec_ready = self._sender_count(self._clients_eof_sec_input, client_id) >= self.sec_n_upstream
             if not main_ready or not sec_ready:
                 return
 
@@ -653,9 +653,6 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                             
                         if i % 100 == 0 and i > 0:
                             self.node_logger.save_batch_state(msg_hash, i, self.last_completed_batch)
-                            self._main_consumer.process_events()
-                            if self._main_producer:
-                                self._main_producer.process_events()
 
                     self.on_main_batch_complete()
                     self.node_logger.save_batch_state(None, 0, msg_hash)
@@ -813,9 +810,6 @@ class WorkerBaseDoubleIO(HealthCheckServer):
 
                         if i % 100 == 0 and i > 0:
                             self.node_logger.save_batch_state(msg_hash, i, self.last_completed_batch)
-                            self._sec_consumer.process_events()
-                            if self._sec_producer:
-                                self._sec_producer.process_events()
 
                     self.on_sec_batch_complete()
                     self.node_logger.save_batch_state(None, 0, msg_hash)
