@@ -1,4 +1,15 @@
 services:
+  chaos_monkey:
+    build:
+      context: ./scripts
+    environment:
+    - CHAOS_TARGETS=usd_filter_0,q1_data_reducer_0,q2_aggregator_0,q2_banks_name_adder_0,q3_avg_and_transactions_joiner_0,q4_inc_edges_filter_0,q4_paths_creators_0,q5_money_converter_0
+    - CHAOS_INTERVAL=30
+    - CHAOS_MIN_WAIT=30
+    profiles:
+    - chaos
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
   client_0:
     build:
       context: ./src
@@ -13,8 +24,8 @@ services:
     - SERVER_HOST=gateway
     - SERVER_PORT=7659
     - BATCH_SIZE=5000
-    - TRANSACTIONS_FILE=/datasets/LI-Small_Trans.csv
-    - ACCOUNTS_FILE=/datasets/LI-Small_accounts.csv
+    - TRANSACTIONS_FILE=/datasets/transactions_full.csv
+    - ACCOUNTS_FILE=/datasets/accounts_full.csv
     - CLIENT_ID=0
     - RESULTS_DIR=/results
     - BATCH_SIZE=20000
@@ -49,6 +60,57 @@ services:
     - QUERY_5_N_UPSTREAM=1
     - TRANSACTION_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1,Amount Paid,Payment
       Currency,Payment Format
+  monitor_0:
+    build:
+      context: ./src/monitor
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - MONITOR_ID=0
+    - SUCCESSORS=monitor_1,monitor_2
+    - HEALTH_PORT=8888
+    - CHECK_INTERVAL=10
+    - HEALTH_TIMEOUT=50
+    - MAX_FAILURES=4
+    - WORKERS=usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q2_banks_name_adder_0,q2_banks_name_adder_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_out_0,q4_splitters_by_origin_and_dest_out_1,q4_splitters_by_origin_and_dest_out_2,q4_out_edges_filter_0,q4_out_edges_filter_1,q4_out_edges_filter_2,q4_out_edges_filter_3,q4_splitters_by_origin_and_dest_inc_0,q4_splitters_by_origin_and_dest_inc_1,q4_splitters_by_origin_and_dest_inc_2,q4_inc_edges_filter_0,q4_inc_edges_filter_1,q4_inc_edges_filter_2,q4_inc_edges_filter_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_aggregator_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0
+    restart: unless-stopped
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  monitor_1:
+    build:
+      context: ./src/monitor
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - MONITOR_ID=1
+    - SUCCESSORS=monitor_2,monitor_0
+    - HEALTH_PORT=8888
+    - CHECK_INTERVAL=10
+    - HEALTH_TIMEOUT=50
+    - MAX_FAILURES=4
+    - WORKERS=usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q2_banks_name_adder_0,q2_banks_name_adder_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_out_0,q4_splitters_by_origin_and_dest_out_1,q4_splitters_by_origin_and_dest_out_2,q4_out_edges_filter_0,q4_out_edges_filter_1,q4_out_edges_filter_2,q4_out_edges_filter_3,q4_splitters_by_origin_and_dest_inc_0,q4_splitters_by_origin_and_dest_inc_1,q4_splitters_by_origin_and_dest_inc_2,q4_inc_edges_filter_0,q4_inc_edges_filter_1,q4_inc_edges_filter_2,q4_inc_edges_filter_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_aggregator_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0
+    restart: unless-stopped
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  monitor_2:
+    build:
+      context: ./src/monitor
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - MONITOR_ID=2
+    - SUCCESSORS=monitor_0,monitor_1
+    - HEALTH_PORT=8888
+    - CHECK_INTERVAL=10
+    - HEALTH_TIMEOUT=50
+    - MAX_FAILURES=4
+    - WORKERS=usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q2_banks_name_adder_0,q2_banks_name_adder_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_out_0,q4_splitters_by_origin_and_dest_out_1,q4_splitters_by_origin_and_dest_out_2,q4_out_edges_filter_0,q4_out_edges_filter_1,q4_out_edges_filter_2,q4_out_edges_filter_3,q4_splitters_by_origin_and_dest_inc_0,q4_splitters_by_origin_and_dest_inc_1,q4_splitters_by_origin_and_dest_inc_2,q4_inc_edges_filter_0,q4_inc_edges_filter_1,q4_inc_edges_filter_2,q4_inc_edges_filter_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_aggregator_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0
+    restart: unless-stopped
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
   q1_data_reducer_0:
     build:
       context: ./src
@@ -294,8 +356,8 @@ services:
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
     - SHARD_KEY_FIELD=From Bank
-    - NORMALIZE_NUMERIC_KEY=true
     - TOTAL_CLIENTS=1
+    - NORMALIZE_NUMERIC_KEY=true
   q2_splitter_by_bank_1:
     build:
       context: ./src
@@ -317,8 +379,8 @@ services:
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
     - SHARD_KEY_FIELD=From Bank
-    - NORMALIZE_NUMERIC_KEY=true
     - TOTAL_CLIENTS=1
+    - NORMALIZE_NUMERIC_KEY=true
   q2_splitter_by_bank_2:
     build:
       context: ./src
@@ -340,8 +402,8 @@ services:
     - N_UPSTREAM=2
     - OUTPUT_SHARDS=2
     - SHARD_KEY_FIELD=From Bank
-    - NORMALIZE_NUMERIC_KEY=true
     - TOTAL_CLIENTS=1
+    - NORMALIZE_NUMERIC_KEY=true
   q3_avg_aggregators_preceding_period_0:
     build:
       context: ./src

@@ -453,4 +453,76 @@ def generate_system_docker_compose(total_clients=0):
         )
         system = system | q5_totals_sumers
 
+                # --- MONITOR Y CHAOS MONKEY ---
+        worker_names = [name for name in system.keys() if name not in ["rabbitmq","gateway"]]
+        system = system | _get_monitor_services(worker_names)
+        system = system | _get_chaos_monkey_service()
+
     return system
+
+def _get_monitor_services(worker_names):
+    workers_value = ",".join(name for name in worker_names if name.lower() not in ["rabbitmq","gateway"])
+    return {
+        "monitor_0": {
+            "build": {"context": "./src/monitor"},
+            "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
+            "restart": "unless-stopped",
+            "environment": [
+                "MONITOR_ID=0",
+                "SUCCESSORS=monitor_1,monitor_2",
+                "HEALTH_PORT=8888",
+                "CHECK_INTERVAL=10",
+                "HEALTH_TIMEOUT=50",
+                "MAX_FAILURES=4",
+                f"WORKERS={workers_value}",
+            ],
+            "volumes": ["/var/run/docker.sock:/var/run/docker.sock"],
+            "restart": "unless-stopped",
+        },
+        "monitor_1": {
+            "build": {"context": "./src/monitor"},
+            "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
+            "restart": "unless-stopped",
+            "environment": [
+                "MONITOR_ID=1",
+                "SUCCESSORS=monitor_2,monitor_0",
+                "HEALTH_PORT=8888",
+                "CHECK_INTERVAL=10",
+                "HEALTH_TIMEOUT=50",
+                "MAX_FAILURES=4",
+                f"WORKERS={workers_value}",
+            ],
+            "volumes": ["/var/run/docker.sock:/var/run/docker.sock"],
+            "restart": "unless-stopped",
+        },
+        "monitor_2": {
+            "build": {"context": "./src/monitor"},
+            "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
+            "restart": "unless-stopped",
+            "environment": [
+                "MONITOR_ID=2",
+                "SUCCESSORS=monitor_0,monitor_1",
+                "HEALTH_PORT=8888",
+                "CHECK_INTERVAL=10",
+                "HEALTH_TIMEOUT=50",
+                "MAX_FAILURES=4",
+                f"WORKERS={workers_value}",
+            ],
+            "volumes": ["/var/run/docker.sock:/var/run/docker.sock"],
+            "restart": "unless-stopped",
+        },
+    }
+
+def _get_chaos_monkey_service():
+    return {
+        "chaos_monkey": {
+            "build": {"context": "./scripts"},
+            "environment": [
+                "CHAOS_TARGETS=usd_filter_0,q1_data_reducer_0,q2_aggregator_0,q2_banks_name_adder_0,q3_avg_and_transactions_joiner_0,q4_inc_edges_filter_0,q4_paths_creators_0,q5_money_converter_0",
+                "CHAOS_INTERVAL=30",
+                "CHAOS_MIN_WAIT=30",
+            ],
+            "volumes": ["/var/run/docker.sock:/var/run/docker.sock"],
+            "profiles": ["chaos"],
+        }
+    }

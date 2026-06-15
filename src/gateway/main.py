@@ -4,11 +4,16 @@ import threading
 import os
 
 from message_handlers import client_handlers, result_handlers
+from common.health.health_server import HealthCheckServer
+
 
 
 def main():
     logging.basicConfig(level=logging.INFO)
 
+    _hs = HealthCheckServer()
+    _hs.start_health_server()
+    
     SERVER_HOST = os.environ.get("SERVER_HOST")
     PORT = int(os.environ.get("SERVER_PORT"))
     MOM_HOST = os.environ.get("MOM_HOST", "rabbitmq")
