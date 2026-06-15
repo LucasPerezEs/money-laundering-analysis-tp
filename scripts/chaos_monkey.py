@@ -124,18 +124,18 @@ def _build_candidates(config: dict[str, Any], compose_services: list[str]) -> li
 
 
 def _docker_compose_cmd(compose_file: Path, project_name: str | None, *args: str) -> list[str]:
-    command = ["docker", "compose", "-f", str(compose_file)]
+    command = ["docker", "compose"]
     if project_name:
         command.extend(["-p", project_name])
     command.extend(args)
     return command
 
 
-def _run(command: list[str], dry_run: bool) -> None:
+def _run(command: list[str], dry_run: bool, cwd: Path | None = None) -> None:
     logging.info("Ejecutando: %s", " ".join(command))
     if dry_run:
         return
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True, cwd=cwd)
 
 
 def _interrupt_service(
@@ -146,19 +146,23 @@ def _interrupt_service(
     downtime_seconds: float,
     dry_run: bool,
 ) -> None:
+    cwd = compose_file.parent
     if action == "restart":
-        _run(_docker_compose_cmd(compose_file, project_name, "restart", service), dry_run)
+        _run(_docker_compose_cmd(compose_file, project_name, "restart", service), dry_run, cwd)
         return
 
     if action == "stop":
-        _run(_docker_compose_cmd(compose_file, project_name, "stop", service), dry_run)
+        _run(_docker_compose_cmd(compose_file, project_name, "stop", service), dry_run, cwd)
         logging.info("Servicio %s detenido sin reinicio automatico", service)
         return
-
+    if action == "kill":
+        _run(_docker_compose_cmd(compose_file, project_name, "kill", "-s", "SIGKILL", service), dry_run, cwd)
+        logging.info("Servicio %s matado abruptamente sin reinicio automatico", service)
+        return
     if action == "stop_start":
-        _run(_docker_compose_cmd(compose_file, project_name, "stop", service), dry_run)
+        _run(_docker_compose_cmd(compose_file, project_name, "stop", service), dry_run, cwd)
     elif action == "kill_start":
-        _run(_docker_compose_cmd(compose_file, project_name, "kill", "-s", "SIGKILL", service), dry_run)
+        _run(_docker_compose_cmd(compose_file, project_name, "kill", "-s", "SIGKILL", service), dry_run, cwd)
     else:
         raise ChaosConfigError("action debe ser restart, stop, stop_start o kill_start.")
 
@@ -166,8 +170,7 @@ def _interrupt_service(
     if not dry_run:
         time.sleep(downtime_seconds)
 
-    _run(_docker_compose_cmd(compose_file, project_name, "start", service), dry_run)
-
+    _run(_docker_compose_cmd(compose_file, project_name, "start", service), dry_run, cwd)
 
 def _pick(candidates: list[ServiceCandidate]) -> ServiceCandidate:
     return random.choices(

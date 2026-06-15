@@ -29,6 +29,7 @@ from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 from common.middleware.middleware_sharded import ShardedExchangeConsumer, ShardedExchangeProducer
 from common.middleware.middleware import MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError
 from common.message_protocol.internal import deserialize, serialize
+from common.health.health_server import HealthCheckServer
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ def _wait_for_rabbitmq():
             time.sleep(RECONNECT_DELAY)
 
 
-class WorkerBase:
+class WorkerBase(HealthCheckServer):
 
     def __init__(self):
         self.input_queue     = os.environ.get("INPUT_QUEUE", "")
@@ -70,6 +71,7 @@ class WorkerBase:
 
         _wait_for_rabbitmq()
         self._setup_connections()
+        self.start_health_server()
 
     def _setup_connections(self):
         # Input
