@@ -129,6 +129,8 @@ services:
     - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
     - TOTAL_CLIENTS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q1_data_reducer_1:
     build:
       context: ./src
@@ -147,6 +149,8 @@ services:
     - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
     - TOTAL_CLIENTS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q1_data_reducer_2:
     build:
       context: ./src
@@ -165,6 +169,8 @@ services:
     - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
     - TOTAL_CLIENTS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q1_filter_lt_50_0:
     build:
       context: ./src
@@ -186,6 +192,8 @@ services:
     - FILTER_VALUE=50
     - TOTAL_CLIENTS=1
     - BATCH_SIZE=5000
+    volumes:
+    - ./worker_logs:/worker_logs
   q1_filter_lt_50_1:
     build:
       context: ./src
@@ -207,6 +215,8 @@ services:
     - FILTER_VALUE=50
     - TOTAL_CLIENTS=1
     - BATCH_SIZE=5000
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_aggregator_0:
     build:
       context: ./src
@@ -230,6 +240,8 @@ services:
     - TOTAL_CLIENTS=1
     - BATCH_SIZE=5000
     - OUTPUT_SHARDS=2
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_aggregator_1:
     build:
       context: ./src
@@ -253,6 +265,8 @@ services:
     - TOTAL_CLIENTS=1
     - BATCH_SIZE=5000
     - OUTPUT_SHARDS=2
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_banks_name_adder_0:
     build:
       context: ./src
@@ -275,6 +289,8 @@ services:
     - SECONDARY_OUTPUT_QUEUE=results_2
     - MAIN_EOF_DEST=SECONDARY
     - SEC_EOF_DEST=NONE
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_banks_name_adder_1:
     build:
       context: ./src
@@ -297,6 +313,8 @@ services:
     - SECONDARY_OUTPUT_QUEUE=results_2
     - MAIN_EOF_DEST=SECONDARY
     - SEC_EOF_DEST=NONE
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_data_reducer_0:
     build:
       context: ./src
@@ -316,6 +334,8 @@ services:
     - KEEP_COLUMNS=From Bank,Account,Amount Paid
     - TOTAL_CLIENTS=1
     - ROUTING_FIELD=From Bank
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_data_reducer_1:
     build:
       context: ./src
@@ -335,6 +355,8 @@ services:
     - KEEP_COLUMNS=From Bank,Account,Amount Paid
     - TOTAL_CLIENTS=1
     - ROUTING_FIELD=From Bank
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_splitter_by_bank_0:
     build:
       context: ./src
@@ -358,6 +380,8 @@ services:
     - SHARD_KEY_FIELD=From Bank
     - TOTAL_CLIENTS=1
     - NORMALIZE_NUMERIC_KEY=true
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_splitter_by_bank_1:
     build:
       context: ./src
@@ -381,6 +405,8 @@ services:
     - SHARD_KEY_FIELD=From Bank
     - TOTAL_CLIENTS=1
     - NORMALIZE_NUMERIC_KEY=true
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_splitter_by_bank_2:
     build:
       context: ./src
@@ -404,6 +430,8 @@ services:
     - SHARD_KEY_FIELD=From Bank
     - TOTAL_CLIENTS=1
     - NORMALIZE_NUMERIC_KEY=true
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_avg_aggregators_preceding_period_0:
     build:
       context: ./src
@@ -425,6 +453,8 @@ services:
     - KEY_FIELD=Payment Format
     - ROUTING_FIELD=Payment Format
     - OUTPUT_SHARDS=3
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_avg_aggregators_preceding_period_1:
     build:
       context: ./src
@@ -446,6 +476,8 @@ services:
     - KEY_FIELD=Payment Format
     - ROUTING_FIELD=Payment Format
     - OUTPUT_SHARDS=3
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_avg_aggregators_preceding_period_2:
     build:
       context: ./src
@@ -467,6 +499,8 @@ services:
     - KEY_FIELD=Payment Format
     - ROUTING_FIELD=Payment Format
     - OUTPUT_SHARDS=3
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_avg_and_transactions_joiner_0:
     build:
       context: ./src
@@ -488,6 +522,8 @@ services:
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
     - BATCH_SIZE=10000
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_avg_and_transactions_joiner_1:
     build:
       context: ./src
@@ -509,6 +545,8 @@ services:
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
     - BATCH_SIZE=10000
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_avg_and_transactions_joiner_2:
     build:
       context: ./src
@@ -530,6 +568,8 @@ services:
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
     - BATCH_SIZE=10000
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_data_reducer_0:
     build:
       context: ./src
@@ -547,6 +587,8 @@ services:
     - OUTPUT_EXCHANGE=q3_reduced_data_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,From Bank,Account,Amount Paid,Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_data_reducer_1:
     build:
       context: ./src
@@ -564,6 +606,8 @@ services:
     - OUTPUT_EXCHANGE=q3_reduced_data_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,From Bank,Account,Amount Paid,Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_data_reducer_2:
     build:
       context: ./src
@@ -581,6 +625,8 @@ services:
     - OUTPUT_EXCHANGE=q3_reduced_data_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,From Bank,Account,Amount Paid,Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_filter_01092022_05092022_0:
     build:
       context: ./src
@@ -601,6 +647,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_filter_01092022_05092022_1:
     build:
       context: ./src
@@ -621,6 +669,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_filter_01092022_05092022_2:
     build:
       context: ./src
@@ -641,6 +691,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_filter_06092022_15092022_0:
     build:
       context: ./src
@@ -662,6 +714,8 @@ services:
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/06", "2022/09/14"]
     - ROUTING_FIELD=Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_filter_06092022_15092022_1:
     build:
       context: ./src
@@ -683,6 +737,8 @@ services:
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/06", "2022/09/14"]
     - ROUTING_FIELD=Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_filter_06092022_15092022_2:
     build:
       context: ./src
@@ -704,6 +760,8 @@ services:
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/06", "2022/09/14"]
     - ROUTING_FIELD=Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_splitter_by_payment_method_0:
     build:
       context: ./src
@@ -725,6 +783,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=3
     - SHARD_KEY_FIELD=Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_splitter_by_payment_method_1:
     build:
       context: ./src
@@ -746,6 +806,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=3
     - SHARD_KEY_FIELD=Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_splitter_by_payment_method_2:
     build:
       context: ./src
@@ -767,6 +829,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=3
     - SHARD_KEY_FIELD=Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_data_reducer_0:
     build:
       context: ./src
@@ -784,6 +848,8 @@ services:
     - OUTPUT_EXCHANGE=q4_reduced_data_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_data_reducer_1:
     build:
       context: ./src
@@ -801,6 +867,8 @@ services:
     - OUTPUT_EXCHANGE=q4_reduced_data_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_data_reducer_2:
     build:
       context: ./src
@@ -818,6 +886,8 @@ services:
     - OUTPUT_EXCHANGE=q4_reduced_data_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_filter_01092022_05092022_prefix_0:
     build:
       context: ./src
@@ -838,6 +908,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_filter_01092022_05092022_prefix_1:
     build:
       context: ./src
@@ -858,6 +930,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_filter_01092022_05092022_prefix_2:
     build:
       context: ./src
@@ -878,6 +952,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_inc_edges_filter_0:
     build:
       context: ./src
@@ -898,6 +974,8 @@ services:
     - SHARD_ID=0
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_inc_edges_filter_1:
     build:
       context: ./src
@@ -918,6 +996,8 @@ services:
     - SHARD_ID=1
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_inc_edges_filter_2:
     build:
       context: ./src
@@ -938,6 +1018,8 @@ services:
     - SHARD_ID=2
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_inc_edges_filter_3:
     build:
       context: ./src
@@ -958,6 +1040,8 @@ services:
     - SHARD_ID=3
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_out_edges_filter_0:
     build:
       context: ./src
@@ -978,6 +1062,8 @@ services:
     - SHARD_ID=0
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_out_edges_filter_1:
     build:
       context: ./src
@@ -998,6 +1084,8 @@ services:
     - SHARD_ID=1
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_out_edges_filter_2:
     build:
       context: ./src
@@ -1018,6 +1106,8 @@ services:
     - SHARD_ID=2
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_out_edges_filter_3:
     build:
       context: ./src
@@ -1038,6 +1128,8 @@ services:
     - SHARD_ID=3
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_paths_aggregator_0:
     build:
       context: ./src
@@ -1059,6 +1151,8 @@ services:
     - OUTPUT_QUEUE=results_4
     - TOTAL_CLIENTS=1
     - BATCH_SIZE=1000
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_paths_creators_0:
     build:
       context: ./src
@@ -1079,6 +1173,8 @@ services:
     - SHARD_ID=0
     - OUTPUT_EXCHANGE=q4_paths_exc
     - OUTPUT_SHARDS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_paths_creators_1:
     build:
       context: ./src
@@ -1099,6 +1195,8 @@ services:
     - SHARD_ID=1
     - OUTPUT_EXCHANGE=q4_paths_exc
     - OUTPUT_SHARDS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_paths_creators_2:
     build:
       context: ./src
@@ -1119,6 +1217,8 @@ services:
     - SHARD_ID=2
     - OUTPUT_EXCHANGE=q4_paths_exc
     - OUTPUT_SHARDS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_paths_creators_3:
     build:
       context: ./src
@@ -1139,6 +1239,8 @@ services:
     - SHARD_ID=3
     - OUTPUT_EXCHANGE=q4_paths_exc
     - OUTPUT_SHARDS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_splitters_by_origin_and_dest_inc_0:
     build:
       context: ./src
@@ -1160,6 +1262,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
     - SHARD_KEY_FIELDS=To Bank,Account.1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_splitters_by_origin_and_dest_inc_1:
     build:
       context: ./src
@@ -1181,6 +1285,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
     - SHARD_KEY_FIELDS=To Bank,Account.1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_splitters_by_origin_and_dest_inc_2:
     build:
       context: ./src
@@ -1202,6 +1308,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
     - SHARD_KEY_FIELDS=To Bank,Account.1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_splitters_by_origin_and_dest_out_0:
     build:
       context: ./src
@@ -1223,6 +1331,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
     - SHARD_KEY_FIELDS=From Bank,Account
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_splitters_by_origin_and_dest_out_1:
     build:
       context: ./src
@@ -1244,6 +1354,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
     - SHARD_KEY_FIELDS=From Bank,Account
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_splitters_by_origin_and_dest_out_2:
     build:
       context: ./src
@@ -1265,6 +1377,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
     - SHARD_KEY_FIELDS=From Bank,Account
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_counter_0:
     build:
       context: ./src
@@ -1282,6 +1396,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_QUEUE=q5_totals_reached
     - AGG_OP=count
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_counter_1:
     build:
       context: ./src
@@ -1299,6 +1415,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_QUEUE=q5_totals_reached
     - AGG_OP=count
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_counter_2:
     build:
       context: ./src
@@ -1316,6 +1434,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_QUEUE=q5_totals_reached
     - AGG_OP=count
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_data_reducer_0:
     build:
       context: ./src
@@ -1333,6 +1453,8 @@ services:
     - OUTPUT_EXCHANGE=q5_reduced_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,Amount Paid,Payment Currency,Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_data_reducer_1:
     build:
       context: ./src
@@ -1350,6 +1472,8 @@ services:
     - OUTPUT_EXCHANGE=q5_reduced_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,Amount Paid,Payment Currency,Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_filter_01092022_05092022_0:
     build:
       context: ./src
@@ -1370,6 +1494,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_filter_01092022_05092022_1:
     build:
       context: ./src
@@ -1390,6 +1516,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_filter_01092022_05092022_2:
     build:
       context: ./src
@@ -1410,6 +1538,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_filter_lt_1_usd_0:
     build:
       context: ./src
@@ -1430,6 +1560,8 @@ services:
     - FILTER_FIELD=Amount Paid
     - FILTER_OP=lt
     - FILTER_VALUE=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_filter_lt_1_usd_1:
     build:
       context: ./src
@@ -1450,6 +1582,8 @@ services:
     - FILTER_FIELD=Amount Paid
     - FILTER_OP=lt
     - FILTER_VALUE=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_filter_lt_1_usd_2:
     build:
       context: ./src
@@ -1470,6 +1604,8 @@ services:
     - FILTER_FIELD=Amount Paid
     - FILTER_OP=lt
     - FILTER_VALUE=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_money_converter_0:
     build:
       context: ./src
@@ -1497,6 +1633,8 @@ services:
     - TARGET_CURRENCY=US Dollar
     - BATCH_SIZE=1
     - SEC_BATCH_SIZE=5000
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_money_converter_1:
     build:
       context: ./src
@@ -1524,6 +1662,8 @@ services:
     - TARGET_CURRENCY=US Dollar
     - BATCH_SIZE=1
     - SEC_BATCH_SIZE=5000
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_money_converter_2:
     build:
       context: ./src
@@ -1551,6 +1691,8 @@ services:
     - TARGET_CURRENCY=US Dollar
     - BATCH_SIZE=1
     - SEC_BATCH_SIZE=5000
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_money_converter_api_client_0:
     build:
       context: ./src
@@ -1570,6 +1712,8 @@ services:
     - INPUT_QUEUE=q5_reqs_currency_rates_api
     - OUTPUT_EXCHANGE=q5_currency_rates_from_api_exc
     - OUTPUT_SHARDS=3
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_payment_fmt_filter_0:
     build:
       context: ./src
@@ -1590,6 +1734,8 @@ services:
     - FILTER_FIELD=Payment Format
     - FILTER_OP=in
     - FILTER_VALUE=["Wire", "ACH"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_payment_fmt_filter_1:
     build:
       context: ./src
@@ -1610,6 +1756,8 @@ services:
     - FILTER_FIELD=Payment Format
     - FILTER_OP=in
     - FILTER_VALUE=["Wire", "ACH"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_payment_fmt_filter_2:
     build:
       context: ./src
@@ -1630,6 +1778,8 @@ services:
     - FILTER_FIELD=Payment Format
     - FILTER_OP=in
     - FILTER_VALUE=["Wire", "ACH"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_transaction_counter_0:
     build:
       context: ./src
@@ -1647,6 +1797,8 @@ services:
     - AGG_OP=sum
     - AGG_FIELD=count
     - TOTAL_CLIENTS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   rabbitmq:
     container_name: rabbitmq
     environment:
@@ -1682,6 +1834,8 @@ services:
     - FILTER_OP=eq
     - FILTER_VALUE=US Dollar
     - TOTAL_CLIENTS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   usd_filter_1:
     build:
       context: ./src
@@ -1703,3 +1857,5 @@ services:
     - FILTER_OP=eq
     - FILTER_VALUE=US Dollar
     - TOTAL_CLIENTS=1
+    volumes:
+    - ./worker_logs:/worker_logs

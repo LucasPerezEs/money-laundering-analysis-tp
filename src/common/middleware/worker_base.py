@@ -23,8 +23,10 @@ from common.health.health_server import HealthCheckServer
 logger = logging.getLogger(__name__)
 
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
+WORKER_LOGS_DIR = os.environ.get("WORKER_LOGS_DIR", "/worker_logs")
 RECONNECT_DELAY = 2
 RECONNECT_MAX_DELAY = 30
+TOTAL_TRANSACTIONS_PERSISTENCE_CHECKPOINT = 100
 
 
 def _wait_for_rabbitmq():
@@ -40,6 +42,8 @@ def _wait_for_rabbitmq():
 
 
 class WorkerBase(HealthCheckServer):
+
+    LOGGER_CLASS = BaseNodeLogger
 
     def __init__(self):
         super().__init__()
@@ -57,14 +61,15 @@ class WorkerBase(HealthCheckServer):
         self._buffer: dict = {}
         self._running = True
 
-        base_logs_dir = "/worker_logs"
+        # Create logger
         worker_name = f"{self.consumer_group}_{self.shard_id}"
-        worker_dir = os.path.join(base_logs_dir, worker_name)
+        worker_dir = os.path.join(WORKER_LOGS_DIR, worker_name)
         os.makedirs(worker_dir, exist_ok=True)
         logger_path = os.path.join(worker_dir, "data")
 
-        self.node_logger = BaseNodeLogger(logger_path)
+        self.node_logger = self.LOGGER_CLASS(logger_path)
 
+        # Recover state
         (self.pending_batch_id, 
          self.processed_tx_count, 
          self.last_completed_batch) = self.node_logger.recover_batch_state()
@@ -130,12 +135,15 @@ class WorkerBase(HealthCheckServer):
 
     # --- Para implementar en subclases -------------------------------------------
 
+    # Executed for each transaction
     def process(self, data: dict) -> list:
         raise NotImplementedError
 
+    # Executed when all EOF's reach the node and the work must be completed
     def on_eof(self, client_id=None) -> list:
         return []
 
+    # Executed to determine the key to decide to which node the transaction is sent
     def _routing_key(self, msg: dict) -> str:
         if self.output_exchange and self.output_shards >= 1:
             routing_field = os.environ.get("ROUTING_FIELD")
@@ -145,6 +153,14 @@ class WorkerBase(HealthCheckServer):
             else:
                 return str(random.randint(0, self.output_shards - 1))
         return "__queue__"
+
+    # Executed when TOTAL_TRANSACTIONS_PERSISTENCE_CHECKPOINT transactions are reached
+    def on_progress_save(self):
+        pass
+
+    # Executed when transactions batch is completed
+    def on_batch_complete(self):
+        pass
 
     def _buffer_key(self, msg: dict) -> str:
         if self.output_exchange and self.output_shards >= 1:
@@ -359,9 +375,11 @@ class WorkerBase(HealthCheckServer):
                     processed_data = self.process(row)
                     self._emit(processed_data)
 
-                    if i % 100 == 0 and i > 0:
+                    if i % TOTAL_TRANSACTIONS_PERSISTENCE_CHECKPOINT == 0 and i > 0:
                         self.node_logger.save_batch_state(msg_hash, i, self.last_completed_batch)
+                        self.on_progress_save()
 
+                self.on_batch_complete()
                 self.node_logger.save_batch_state(None, 0, msg_hash)
                 self.pending_batch_id = None
                 self.processed_tx_count = 0

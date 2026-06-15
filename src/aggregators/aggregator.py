@@ -26,6 +26,8 @@ import os
 import sys
 sys.path.insert(0, "/app") 
 sys.path.insert(0, "/app/common") 
+
+from aggregator_logger import AggregatorLogger
 from common.middleware.worker_base import WorkerBase
 
 logging.basicConfig(level=logging.INFO)
@@ -33,6 +35,8 @@ logger = logging.getLogger(__name__)
 
 
 class Aggregator(WorkerBase):
+
+    LOGGER_CLASS = AggregatorLogger
 
     def __init__(self):
         super().__init__()
@@ -43,10 +47,12 @@ class Aggregator(WorkerBase):
             f.strip() for f in os.environ.get("CARRY_FIELDS", "").split(",") if f.strip()
         ]
         self.output_tag   = os.environ.get("OUTPUT_TAG", "")
-        self._state       = {}  # ahora será {client_id: {key: accumulator}}
+
+        # Recover state
+        self._state = self.node_logger.recover_aggregator_state()
         logger.info(
             f"Aggregator op={self.op} field={self.agg_field} "
-            f"key={self.key_field or '(global)'}"
+            f"key={self.key_field or '(global)'} | Estado recuperado: {len(self._state)} clientes."
         )
 
     def _key(self, data: dict) -> str:
@@ -100,6 +106,12 @@ class Aggregator(WorkerBase):
             cstate = self._state.pop(client_id, {})
             for k, acc in cstate.items():
                 yield self._build_result(k, acc, client_id)
+
+    def on_progress_save(self):
+        self.node_logger.save_aggregator_state(self._state)
+
+    def on_batch_complete(self):
+        self.node_logger.save_aggregator_state(self._state)
 
     def _build_result(self, key, acc, client_id):
         result = {}
