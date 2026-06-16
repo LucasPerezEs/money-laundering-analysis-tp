@@ -1,14 +1,21 @@
 import logging
 import zlib
 from collections import defaultdict
+from paths_creator_logger import PathsCreatorLogger
 from common.middleware.worker_base import WorkerBase
 
 class PathsCreator(WorkerBase):
 
+    LOGGER_CLASS = PathsCreatorLogger
+
     def __init__(self):
         super().__init__()
-        self.incoming_edges = {}
-        self.outgoing_edges = {}
+        self.incoming_edges, self.outgoing_edges = self.node_logger.recover_creator_state()
+        
+        logging.info(
+            f"PathsCreator estado recuperado: {len(self.incoming_edges)} clientes en incoming, "
+            f"{len(self.outgoing_edges)} clientes en outgoing."
+        )
 
     def process(self, data):
         client_id = data.get("client_id")
@@ -84,6 +91,12 @@ class PathsCreator(WorkerBase):
         self.incoming_edges.pop(client_id, None)
         self.outgoing_edges.pop(client_id, None)
         return []
+    
+    def on_progress_save(self):
+        self.node_logger.save_creator_state(self.incoming_edges, self.outgoing_edges)
+
+    def on_batch_complete(self):
+        self.node_logger.save_creator_state(self.incoming_edges, self.outgoing_edges)
 
     def _routing_key(self, msg: dict) -> str:
         key = (

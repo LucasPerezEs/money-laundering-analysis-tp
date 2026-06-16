@@ -26,7 +26,7 @@ RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 WORKER_LOGS_DIR = os.environ.get("WORKER_LOGS_DIR", "/worker_logs")
 RECONNECT_DELAY = 2
 RECONNECT_MAX_DELAY = 30
-TOTAL_TRANSACTIONS_PERSISTENCE_CHECKPOINT = 100
+DEFAULT_TOTAL_TRANSACTIONS_PERSISTENCE_CHECKPOINT = 100
 
 
 def _wait_for_rabbitmq():
@@ -60,6 +60,7 @@ class WorkerBase(HealthCheckServer):
 
         self._buffer: dict = {}
         self._running = True
+        self._total_checkpoints_interval = DEFAULT_TOTAL_TRANSACTIONS_PERSISTENCE_CHECKPOINT
 
         # Create logger
         worker_name = f"{self.consumer_group}_{self.shard_id}"
@@ -375,7 +376,7 @@ class WorkerBase(HealthCheckServer):
                     processed_data = self.process(row)
                     self._emit(processed_data)
 
-                    if i % TOTAL_TRANSACTIONS_PERSISTENCE_CHECKPOINT == 0 and i > 0:
+                    if self._total_checkpoints_interval > 0 and i % self._total_checkpoints_interval == 0 and i > 0:
                         self.node_logger.save_batch_state(msg_hash, i, self.last_completed_batch)
                         self.on_progress_save()
 

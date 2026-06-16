@@ -1,15 +1,30 @@
 import logging
 import os
 import zlib
+
+from edges_filter_logger import EdgesFilterLogger
 from common.middleware.worker_base import WorkerBase
 from disk_storage_management import DiskSet
 
 class OutgoingEdgesFilter(WorkerBase):
 
+    LOGGER_CLASS = EdgesFilterLogger
+
     def __init__(self):
         super().__init__()
+        self.checkpoint_interval = 0
         self._min_outgoing_edges = int(os.environ.get("MIN_OUTGOING", "5"))
         self._clients_files_by_id = {}
+
+        # Recover state
+        active_clients = self.node_logger.recover_active_clients()
+        for cid in active_clients:
+            self._clients_files_by_id[cid] = DiskSet(
+                base_dir=self.node_logger.disk_sets_base_dir,
+                id=f"{self.shard_id}_{cid}",
+                encode_func=OutgoingEdgesFilter.encode,
+                decode_func=OutgoingEdgesFilter.decode,
+            )
 
     @staticmethod
     def encode(elem):
@@ -80,7 +95,17 @@ class OutgoingEdgesFilter(WorkerBase):
                     "Account.1" : sent_elem[1]
                 }
 
+        disk_set.destroy()
         del self._clients_files_by_id[client_id]
+        self.node_logger.save_active_clients(list(self._clients_files_by_id.keys()))
+
+    def on_progress_save(self):
+        pass
+
+    def on_batch_complete(self):
+        for disk_set in self._clients_files_by_id.values():
+            disk_set.flush()
+        self.node_logger.save_active_clients(list(self._clients_files_by_id.keys()))
 
     def _routing_key(self, msg: dict) -> str:
         key = f"{msg['To Bank']}{msg['Account.1']}"

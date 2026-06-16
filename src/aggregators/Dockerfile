@@ -6,6 +6,7 @@ RUN pip3 install pika
 COPY common /app/common
 COPY aggregators/aggregator.py /app/aggregator.py
 COPY aggregators/splitter.py   /app/splitter.py
+COPY aggregators/aggregator_logger.py /app/aggregator_logger.py
 
 # Entrypoint por defecto es aggregator, pero el compose puede sobrescribirlo
 ENTRYPOINT ["python3", "/app/aggregator.py"]

@@ -11,36 +11,31 @@ TEMP_DATA_FILE = "temp_data.txt"
 
 class DiskSet():
 
-    def __init__(self, id=None, encode_func=None, decode_func=None):
-        # Define RAM set
+    def __init__(self, base_dir: str, id=None, encode_func=None, decode_func=None):
         self._internal_set = set()
-
-        # Store serialization functions
         self._encode_func = encode_func
         self._decode_func = decode_func
 
-        # Define folder
-        if id is not None:
-            self._data_dir = Path(f"/tmp/storage_{id}")
-        else:
-            self._data_dir = Path(f"/tmp/storage")
+        dir_name = f"storage_{id}" if id is not None else "storage"
+        self._data_dir = Path(base_dir).joinpath(dir_name)
         os.makedirs(self._data_dir, exist_ok=True)
 
-        # Define file
         self._data_file_path = self._data_dir.joinpath(DATA_FILE)
         if not self._data_file_path.exists():
             self._data_file_path.touch()
         self._temp_data_file_path = self._data_dir.joinpath(TEMP_DATA_FILE)
 
-
-    def __del__(self):
-        del self._internal_set
+    def destroy(self):
+        self._internal_set.clear()
         self._data_file_path.unlink(missing_ok=True)
         self._temp_data_file_path.unlink(missing_ok=True)
         try:
             self._data_dir.rmdir()
-        except:
+        except Exception:
             pass
+
+    def flush(self):
+        self._flush_set()
 
 
     # Internal functions

@@ -1,4 +1,6 @@
 import logging
+
+from paths_agg_logger import PathsAggregatorLogger
 from common.middleware.worker_base import WorkerBase
 
 MIN_TOTAL_PATHS = 5
@@ -6,9 +8,12 @@ MIN_TOTAL_PATHS = 5
 
 class PathsAggregator(WorkerBase):
 
+    LOGGER_CLASS = PathsAggregatorLogger
+
     def __init__(self):
         super().__init__()
-        self.total_pair_counts = {}
+        self.total_pair_counts = self.node_logger.recover_paths_state()
+        logging.info(f"PathsAggregator estado recuperado: {len(self.total_pair_counts)} clientes en memoria.")
 
     def process(self, data):
         client_id = data["client_id"]
@@ -52,6 +57,12 @@ class PathsAggregator(WorkerBase):
             f"pairs={len(pair_counts)} max_paths_for_pair={max_paths} "
             f"qualified_pairs={qualified_pairs} emitted_accounts={len(unique_accounts)}"
         )
+
+    def on_progress_save(self):
+        self.node_logger.save_paths_state(self.total_pair_counts)
+
+    def on_batch_complete(self):
+        self.node_logger.save_paths_state(self.total_pair_counts)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
