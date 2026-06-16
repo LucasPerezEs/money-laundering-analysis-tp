@@ -1,5 +1,7 @@
 import logging
+import os
 
+from bank_name_adder_logger import BankNameAdderLogger
 from common.middleware.double_io_worker_base import WorkerBaseDoubleIO
 
 def _normalize_bank_id(bank_id):
@@ -10,14 +12,36 @@ def _normalize_bank_id(bank_id):
 
 class BankNameAdder(WorkerBaseDoubleIO):
 
+    LOGGER_CLASS = BankNameAdderLogger
+
     def waits_for_both_pipeline_eofs(self) -> bool:
         return True
 
     def __init__(self):
         super().__init__()
-        self.sec_batch_size = 1
+        self.sec_batch_size = 1000
+
+        shard_id = os.environ.get("SHARD_ID", "-1")
+        worker_dir = os.path.join(self.WORKER_LOGS_DIR, f"{self.consumer_group}_{shard_id}")
+        os.makedirs(worker_dir, exist_ok=True)
+        
+        temp_logger = self.LOGGER_CLASS(os.path.join(worker_dir, "temp"))
+        self._rec_cache, self._rec_pending = temp_logger.recover_bank_state()
+        temp_logger.close()
+        
+        self._state_restored = False
+        
+        logging.info(f"BankNameAdder recuperó {len(self._rec_cache)} bancos cacheados y {len(self._rec_pending)} pendientes.")
 
     def process_main_input(self, data: dict) -> tuple[list, list]:
+        # Update recovered state if was read
+        if not self._state_restored:
+            with self._shared_lock:
+                if not self._state_restored:
+                    self._shared_cache.update(self._rec_cache)
+                    self._shared_pending.update(self._rec_pending)
+                    self._state_restored = True
+
         bank_id = _normalize_bank_id(data.get("From Bank"))
 
         # Get shared lock for shared elements
@@ -33,6 +57,14 @@ class BankNameAdder(WorkerBaseDoubleIO):
                 return ([], [])
 
     def process_secondary_input(self, data: dict) -> tuple[list, list]:
+        # Update recovered state if was read
+        if not self._state_restored:
+            with self._shared_lock:
+                if not self._state_restored:
+                    self._shared_cache.update(self._rec_cache)
+                    self._shared_pending.update(self._rec_pending)
+                    self._state_restored = True
+
         bank_id = _normalize_bank_id(data.get("bank_id", data.get("From Bank")))
         bank_name = data.get("bank_name", data.get("Bank Name"))
 
@@ -49,10 +81,23 @@ class BankNameAdder(WorkerBaseDoubleIO):
                     msg["Bank Name"] = bank_name
                     resolved_messages.append(msg)
 
-            # Publicar antes de liberar el lock evita que EOF adelante filas resueltas.
             self._emit_sec_output(resolved_messages)
 
         return ([], [])
+    
+    def on_main_batch_complete(self):
+        if hasattr(self, "node_logger"):
+            self.node_logger.save_bank_state(
+                dict(self._shared_cache), 
+                dict(self._shared_pending)
+            )
+
+    def on_sec_batch_complete(self):
+        if hasattr(self, "node_logger"):
+            self.node_logger.save_bank_state(
+                dict(self._shared_cache), 
+                dict(self._shared_pending)
+            )
 
     def on_main_input_eof(self, client_id=None) -> list:
         unmatched = []
@@ -65,6 +110,12 @@ class BankNameAdder(WorkerBaseDoubleIO):
 
         if unmatched:
             self._emit_sec_output(unmatched)
+
+        if hasattr(self, "node_logger"):
+            self.node_logger.save_bank_state(
+                dict(self._shared_cache), 
+                dict(self._shared_pending)
+            )
 
         return []
 
