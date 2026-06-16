@@ -46,6 +46,7 @@ from common.health.health_server import HealthCheckServer
 logger = logging.getLogger(__name__)
 
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
+WORKER_LOGS_DIR = os.environ.get("WORKER_LOGS_DIR", "/worker_logs")
 RECONNECT_DELAY = 2
 RECONNECT_MAX_DELAY = 30
 
@@ -63,6 +64,8 @@ def _wait_for_rabbitmq():
 
 
 class WorkerBaseDoubleIO(HealthCheckServer):
+
+    LOGGER_CLASS = BaseNodeLogger
 
     def __init__(self):
         self.batch_size      = int(os.environ.get("BATCH_SIZE", "500"))
@@ -921,13 +924,12 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             self._sec_producer = None
 
         # Logging
-        base_logs_dir = "/worker_logs"
         worker_name = f"{self.consumer_group}_{self.shard_id}"
-        worker_dir = os.path.join(base_logs_dir, worker_name)
+        worker_dir = os.path.join(WORKER_LOGS_DIR, worker_name)
         os.makedirs(worker_dir, exist_ok=True)
         logger_path = os.path.join(worker_dir, "main")
 
-        self.node_logger = BaseNodeLogger(logger_path)
+        self.node_logger = self.LOGGER_CLASS(logger_path)
 
         # Recover state
         self.pending_batch_id, self.processed_tx_count, self.last_completed_batch = self.node_logger.recover_batch_state()
@@ -1015,13 +1017,12 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             self._sec_producer = None
 
         # Logging
-        base_logs_dir = "/worker_logs"
         worker_name = f"{self.consumer_group}_{self.shard_id}"
-        worker_dir = os.path.join(base_logs_dir, worker_name)
+        worker_dir = os.path.join(WORKER_LOGS_DIR, worker_name)
         os.makedirs(worker_dir, exist_ok=True)
         logger_path = os.path.join(worker_dir, "sec")
 
-        self.node_logger = BaseNodeLogger(logger_path)
+        self.node_logger = self.LOGGER_CLASS(logger_path)
 
         # Recover state
         self.pending_batch_id, self.processed_tx_count, self.last_completed_batch = self.node_logger.recover_batch_state()

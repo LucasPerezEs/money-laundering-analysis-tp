@@ -1,3 +1,4 @@
+from barrier_filter_logger import BarrierFilterLogger
 from common.middleware.double_io_worker_base import WorkerBaseDoubleIO
 
 import json
@@ -8,26 +9,39 @@ import tempfile
 
 
 class BarrierFilter(WorkerBaseDoubleIO):
+
+    LOGGER_CLASS = BarrierFilterLogger
+
     def __init__(self):
         super().__init__()
 
         self._coeficient_comparison_value = float(os.environ["COEF"])
+
+        # Logger
+        shard_id = os.environ.get("SHARD_ID", "unknown")
+        worker_dir = os.path.join(self.WORKER_LOGS_DIR, f"{self.consumer_group}_{shard_id}")
         self._spool_dir = os.environ.get(
             "BARRIER_FILTER_SPOOL_DIR",
-            os.path.join(tempfile.gettempdir(), "barrier_filter"),
+            os.path.join(worker_dir, "spool"),
         )
         os.makedirs(self._spool_dir, exist_ok=True)
 
+        temp_logger = self.LOGGER_CLASS(os.path.join(worker_dir, "temp"))
+        rec_thresholds, rec_ready = temp_logger.recover_barrier_state()
+        temp_logger.close()
+
         # Processes manager
         manager = multiprocessing.Manager()
-        self._comparison_values_by_client = manager.dict()
-        self._thresholds_ready_by_client = manager.dict()
+        self._comparison_values_by_client = manager.dict(rec_thresholds)
+        self._thresholds_ready_by_client = manager.dict(rec_ready)
         self._spool_lock = multiprocessing.Lock()
 
         # Local elements
-        self._local_thresholds_ready = set()
-        self._local_comparison_values = {}
+        self._local_thresholds_ready = set(rec_ready.keys())
+        self._local_comparison_values = dict(rec_thresholds)
         self._spool_buffer = {}
+        
+        logging.info(f"BarrierFilter recuperó estado de {len(rec_thresholds)} clientes.")
 
     def _spool_path(self, client_id):
         shard_id = os.environ.get("SHARD_ID", "unknown")
@@ -133,6 +147,13 @@ class BarrierFilter(WorkerBaseDoubleIO):
         logging.debug("Promedio guardado")
         return ([], [])
 
+    def on_sec_batch_complete(self):
+        if hasattr(self, "node_logger"):
+            self.node_logger.save_barrier_state(
+                dict(self._comparison_values_by_client),
+                dict(self._thresholds_ready_by_client)
+            )
+
     def on_secondary_ready(self, client_id=None):
         logging.info(f"Promedios listos para cliente {client_id}")
 
@@ -141,21 +162,23 @@ class BarrierFilter(WorkerBaseDoubleIO):
             comparison_values = self._comparison_values_by_client.get(client_id, {})
             snapshot_path = self._snapshot_spool(client_id)
 
+        if hasattr(self, "node_logger"):
+            self.node_logger.save_barrier_state(
+                dict(self._comparison_values_by_client),
+                dict(self._thresholds_ready_by_client)
+            )
+
         if snapshot_path is None:
-            logging.info("No hay transacciones en spool para procesar.")
             return
 
         sent_transactions = 0
-        scanned_transactions = 0
         for transaction in self._iter_transactions_from_path(snapshot_path):
-            scanned_transactions += 1
             result = self._filter_transaction(client_id, transaction, comparison_values)
             if result is not None:
                 sent_transactions += 1
                 yield result
 
         self._delete_path(snapshot_path)
-        logging.info(f"Se leyeron {scanned_transactions} transacciones desde spool.")
         logging.info(f"Se enviaron {sent_transactions} transacciones desde spool.")
 
     def on_both_eof_received(self, client_id=None):
@@ -164,7 +187,13 @@ class BarrierFilter(WorkerBaseDoubleIO):
         self._comparison_values_by_client.pop(client_id, None)
         self._local_thresholds_ready.discard(client_id)
         self._local_comparison_values.pop(client_id, None)
-        logging.info("Estado del cliente limpiado")
+
+        if hasattr(self, "node_logger"):
+            self.node_logger.save_barrier_state(
+                dict(self._comparison_values_by_client),
+                dict(self._thresholds_ready_by_client)
+            )
+            
         return iter([])
 
 
