@@ -1,3 +1,4 @@
+from money_client_api_logger import ConversionClientAPILogger
 from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 from common.message_protocol import internal
 from common.middleware.worker_base import WorkerBase
@@ -8,9 +9,13 @@ import time
 
 
 class MoneyConversionClient(WorkerBase):
+
+    LOGGER_CLASS = ConversionClientAPILogger
+
     def __init__(self):
         super().__init__()
-        self._currency_rates_by_date = {}
+        self._currency_rates_by_date = self.node_logger.recover_rates_state()
+        logging.info(f"Estado recuperado: {len(self._currency_rates_by_date)} tasas.")
 
     def _request_api(self, day, from_currency, to_currency):
         url = f"https://api.frankfurter.dev/v2/rate/{from_currency}/{to_currency}?date={day}"
@@ -38,6 +43,12 @@ class MoneyConversionClient(WorkerBase):
             return [data_copy]
 
         return [{"Type" : "eob"}]
+    
+    def on_progress_save(self):
+        self.node_logger.save_rates_state(self._currency_rates_by_date)
+
+    def on_batch_complete(self):
+        self.node_logger.save_rates_state(self._currency_rates_by_date)
 
     def on_eof(self, client_id=None):
         return []

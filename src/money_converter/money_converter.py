@@ -2,6 +2,7 @@ import csv
 import logging
 import os
 
+from money_converter_logger import MoneyConverterLogger
 from common.middleware.double_io_worker_base import WorkerBaseDoubleIO
 
 TARGET_CURRENCY_TAG = "TARGET_CURRENCY"
@@ -20,6 +21,8 @@ CURRENCY_CODES = {
 
 class MoneyConverter(WorkerBaseDoubleIO):
 
+    LOGGER_CLASS = MoneyConverterLogger
+
     def __init__(self):
         super().__init__()
 
@@ -30,6 +33,16 @@ class MoneyConverter(WorkerBaseDoubleIO):
         self._currency_rates_by_date = {}
         self._btc_rates_by_day = self._load_btc_rates()
         self._log_samples_remaining = int(os.environ.get(CONVERSION_LOG_SAMPLES_TAG, "20"))
+
+        # Recover state
+        shard_id = os.environ.get("SHARD_ID", "-1")
+        worker_dir = os.path.join(self.WORKER_LOGS_DIR, f"{self.consumer_group}_{shard_id}")
+        
+        temp_logger = self.LOGGER_CLASS(os.path.join(worker_dir, "temp"))
+        self._rec_cache, self._rec_pending = temp_logger.recover_converter_state()
+        temp_logger.close()
+        
+        self._state_restored = False
 
     def _log_conversion(self, day, origin_code, target_code, amount_in, rate, amount_out):
         if self._log_samples_remaining <= 0:
@@ -64,6 +77,14 @@ class MoneyConverter(WorkerBaseDoubleIO):
         return {"timestamp": timestamp, "origin": origin_curr, "destination": dest_curr, "sender_id": self.shard_id}
 
     def process_main_input(self, data: dict) -> tuple[list, list]:
+        # Read once time the state that was restored
+        if not self._state_restored:
+            with self._shared_lock:
+                if not self._state_restored:
+                    self._shared_cache.update(self._rec_cache)
+                    self._shared_pending.update(self._rec_pending)
+                    self._state_restored = True
+
         # Get data elements
         data_copy = data.copy()
         timestamp = data["Timestamp"]
@@ -119,6 +140,14 @@ class MoneyConverter(WorkerBaseDoubleIO):
 
 
     def process_secondary_input(self, data: dict) -> tuple[list, list]:
+        # Read once time the state that was restored
+        if not self._state_restored:
+            with self._shared_lock:
+                if not self._state_restored:
+                    self._shared_cache.update(self._rec_cache)
+                    self._shared_pending.update(self._rec_pending)
+                    self._state_restored = True
+
         new_data_list = []
 
         if "Type" not in data:
@@ -141,6 +170,20 @@ class MoneyConverter(WorkerBaseDoubleIO):
                 new_data_list.append(row)
 
         return ([], new_data_list)
+    
+    def on_main_batch_complete(self):
+        if hasattr(self, "node_logger"):
+            self.node_logger.save_converter_state(
+                dict(self._shared_cache), 
+                dict(self._shared_pending)
+            )
+
+    def on_sec_batch_complete(self):
+        if hasattr(self, "node_logger"):
+            self.node_logger.save_converter_state(
+                dict(self._shared_cache), 
+                dict(self._shared_pending)
+            )
 
 if __name__ == "__main__":
     logger = logging.getLogger(__file__)
