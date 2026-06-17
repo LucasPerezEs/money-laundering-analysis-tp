@@ -101,7 +101,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
     def _handle_sec_process_sigterm(self, *_):
         self._close_sec_resources()
 
-    def _close_main_resources(self):
+    def _close_main_resources(self, close_logger=True):
         try:
             if hasattr(self, "_main_consumer") and self._main_consumer is not None:
                 self._main_consumer.stop_consuming()
@@ -113,10 +113,10 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 self._main_producer.close()
         except Exception:
             pass
-        if hasattr(self, "node_logger") and self.node_logger is not None:
+        if close_logger and hasattr(self, "node_logger") and self.node_logger is not None:
             self.node_logger.close()
 
-    def _close_sec_resources(self):
+    def _close_sec_resources(self, close_logger=True):
         try:
             if hasattr(self, "_sec_consumer") and self._sec_consumer is not None:
                 self._sec_consumer.stop_consuming()
@@ -128,7 +128,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 self._sec_producer.close()
         except Exception:
             pass
-        if hasattr(self, "node_logger") and self.node_logger is not None:
+        if close_logger and hasattr(self, "node_logger") and self.node_logger is not None:
             self.node_logger.close()
 
     def _producer_is_open(self, producer):
@@ -444,42 +444,6 @@ class WorkerBaseDoubleIO(HealthCheckServer):
         self.node_logger.log_checkpoint_done_key(key, client_id, checkpoint_id)
         self.completed_checkpoints.add(key)
 
-    def _clear_checkpoint_done_for_client(self, client_id):
-        self.node_logger.clear_checkpoint_done_for_client(client_id)
-        client_key = str(client_id)
-        self.completed_checkpoints = {
-            checkpoint_key
-            for checkpoint_key in self.completed_checkpoints
-            if f":{client_key}:" not in checkpoint_key
-        }
-
-    def _clear_eof_done_for_new_rows(self, rows: list):
-        first_row = rows[0] if rows else None
-        if not isinstance(first_row, dict):
-            return
-
-        client_id = first_row.get("client_id")
-        if client_id is None:
-            return
-
-        events = ("main", "secondary", "secondary_ready", "both")
-        if not any(self._eof_is_done(event, client_id) for event in events):
-            return
-
-        logger.info(f"{self.__class__.__name__} nueva ejecucion para client_id={client_id}; limpiando EOF completado anterior")
-        for event in events:
-            key = self._eof_done_key(event, client_id)
-            self.node_logger.clear_eof_done_key(key)
-            self.completed_eofs.discard(key)
-
-        self.node_logger.clear_eof(client_id)
-        self._clear_checkpoint_done_for_client(client_id)
-        with self._eof_lock:
-            self._clients_eof_main_input.pop(client_id, None)
-            self._clients_eof_sec_input.pop(client_id, None)
-            self._clients_joined.pop(client_id, None)
-            self._clients_secondary_ready.pop(client_id, None)
-
     def _send_main_checkpoint(self, client_id, checkpoint_id):
         if self._main_producer is None:
             return
@@ -643,7 +607,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             try:
                 msg_hash = hashlib.md5(body).hexdigest()
                 if msg_hash == self.last_completed_batch:
-                    logger.warning(f"DUPLICADO IGNORADO ({msg_hash}) en {self.__class__.__name__}. Haciendo ack silencioso.")
+                    logger.info(f"DUPLICADO IGNORADO ({msg_hash}) en {self.__class__.__name__}. Haciendo ack silencioso.")
                     ack()
                     return
                     
@@ -662,7 +626,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                     with self._eof_lock:
                         senders = self._sender_set(self._checkpoints_main, chk_key)
                         if sender_id in senders:
-                            logger.warning(f"CHECKPOINT MAIN DUPLICADO IGNORADO de {sender_id}. Haciendo ack silencioso.")
+                            logger.info(f"CHECKPOINT MAIN DUPLICADO IGNORADO de {sender_id}. Haciendo ack silencioso.")
                             ack()
                             return
                             
@@ -756,8 +720,6 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 else:
                     is_resuming = (msg_hash == self.pending_batch_id)
                     rows = msg.get("rows", [])
-                    if rows:
-                        self._clear_eof_done_for_new_rows(rows)
 
                     if not is_resuming:
                         self.node_logger.save_batch_state(msg_hash, 0, self.last_completed_batch)
@@ -797,7 +759,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 if not self._running:
                     break
                 logger.error("Conexion perdida con RabbitMQ")
-                self._close_main_resources()
+                self._close_main_resources(close_logger=False)
                 _wait_for_rabbitmq()
                 self._reconnect_backoff(attempt)
                 self._main_consumer = self._create_main_consumer()
@@ -815,7 +777,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
             try:
                 msg_hash = hashlib.md5(body).hexdigest()
                 if msg_hash == self.last_completed_batch:
-                    logger.warning(f"DUPLICADO IGNORADO ({msg_hash}) en {self.__class__.__name__}. Haciendo ack silencioso.")
+                    logger.info(f"DUPLICADO IGNORADO ({msg_hash}) en {self.__class__.__name__}. Haciendo ack silencioso.")
                     ack()
                     return
                     
@@ -835,7 +797,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                     with self._eof_lock:
                         senders = self._sender_set(self._checkpoints_sec, chk_key)
                         if sender_id in senders:
-                            logger.warning(f"CHECKPOINT SEC DUPLICADO IGNORADO de {sender_id}. Haciendo ack silencioso.")
+                            logger.info(f"CHECKPOINT SEC DUPLICADO IGNORADO de {sender_id}. Haciendo ack silencioso.")
                             ack()
                             return
                             
@@ -929,8 +891,6 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 else:
                     is_resuming = (msg_hash == self.pending_batch_id)
                     rows = msg.get("rows", [])
-                    if rows:
-                        self._clear_eof_done_for_new_rows(rows)
 
                     if not is_resuming:
                         self.node_logger.save_batch_state(msg_hash, 0, self.last_completed_batch)
@@ -969,7 +929,7 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 if not self._running:
                     break
                 logger.error("Conexion perdida con RabbitMQ")
-                self._close_sec_resources()
+                self._close_sec_resources(close_logger=False)
                 _wait_for_rabbitmq()
                 self._reconnect_backoff(attempt)
                 self._sec_consumer = self._create_sec_consumer()
@@ -1096,6 +1056,9 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 current = self._sender_set(self._clients_eof_main_input, cid)
                 current.update(senders)
                 self._clients_eof_main_input[cid] = current
+            if len(self._sender_set(self._clients_eof_main_input, cid)) >= self.main_n_upstream:
+                logger.info(f"{self.__class__.__name__} recupero EOF main completo para client_id={cid}; ejecutando cierre pendiente")
+                self._execute_eof_main_input(cid)
 
         signal.signal(signal.SIGTERM, self._handle_main_process_sigterm)
         self.handle_message_main_input(recovered_eof_global)
@@ -1201,6 +1164,9 @@ class WorkerBaseDoubleIO(HealthCheckServer):
                 current = self._sender_set(self._clients_eof_sec_input, cid)
                 current.update(senders)
                 self._clients_eof_sec_input[cid] = current
+            if len(self._sender_set(self._clients_eof_sec_input, cid)) >= self.sec_n_upstream:
+                logger.info(f"{self.__class__.__name__} recupero EOF secondary completo para client_id={cid}; ejecutando cierre pendiente")
+                self._execute_eof_sec_input(cid)
 
         signal.signal(signal.SIGTERM, self._handle_sec_process_sigterm)
         self.handle_message_sec_input(recovered_eof_global)
