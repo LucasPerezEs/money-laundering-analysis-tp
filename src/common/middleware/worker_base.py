@@ -157,12 +157,15 @@ class WorkerBase(HealthCheckServer):
 
     # --- Emisión con Buffer y flush --------------------------------------------------------
 
+    def _outbox_client_id(self, msg: dict):
+        return msg.get("client_id") if isinstance(msg, dict) else None
+
     def _emit(self, results: list):
         if not results or self._producer is None:
             return
         for msg in results:
             buf_key = self._buffer_key(msg)
-            client_id = msg.get("client_id")
+            client_id = self._outbox_client_id(msg)
 
             self._buffer.setdefault(buf_key, []).append(msg)
             self.node_logger.append_to_buffer(client_id, buf_key, msg)
@@ -171,15 +174,26 @@ class WorkerBase(HealthCheckServer):
                 self._flush_key(buf_key)
 
     def _flush_key(self, buf_key: str):
-        rows = self._buffer.pop(buf_key, [])
-        if not rows:
+        records = self._buffer.pop(buf_key, [])
+        if not records:
             return
 
-        body = serialize({
-            "rows": rows,
-            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}"
-        })
-        
+        if buf_key == "__control__":
+            self._flush_control_records(records)
+        else:
+            body = serialize({
+                "rows": records,
+                "_worker_node_id": f"{self.consumer_group}_{self.shard_id}"
+            })
+
+            self._send_body(buf_key, body)
+
+        clients_in_batch = {self._outbox_client_id(record) for record in records}
+        for cid in clients_in_batch:
+            if hasattr(self, "node_logger"):
+                self.node_logger.clear_buffer(cid, buf_key)
+
+    def _send_body(self, buf_key: str, body: bytes):
         try:
             if self.output_exchange and self.output_shards >= 1:
                 self._producer.send_to_shard(body, int(buf_key))
@@ -194,10 +208,39 @@ class WorkerBase(HealthCheckServer):
             else:
                 self._producer.send(body)
 
-        clients_in_batch = {row.get("client_id") for row in rows}
-        for cid in clients_in_batch:
-            if hasattr(self, "node_logger"):
-                self.node_logger.clear_buffer(cid, buf_key)
+    def _send_control_body(self, body: bytes):
+        try:
+            if self.output_exchange and self.output_shards >= 1:
+                self._producer.send_eof_to_all(body)
+            else:
+                self._producer.send(body)
+        except (MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError):
+            self._close_resources()
+            _wait_for_rabbitmq()
+            self._setup_connections()
+            if self.output_exchange and self.output_shards >= 1:
+                self._producer.send_eof_to_all(body)
+            else:
+                self._producer.send(body)
+
+    def _flush_control_records(self, records: list):
+        for record in records:
+            control_msg = record.get("message", record)
+            self._send_control_body(serialize(control_msg))
+
+    def _emit_control(self, msg: dict):
+        if self._producer is None:
+            return
+        record = {
+            "__outbox_type": "control",
+            "client_id": msg.get("client_id"),
+            "message": msg,
+        }
+        buf_key = "__control__"
+        client_id = self._outbox_client_id(record)
+        self._buffer.setdefault(buf_key, []).append(record)
+        self.node_logger.append_to_buffer(client_id, buf_key, record)
+        self._flush_key(buf_key)
 
     def _flush_all(self):
         for key in list(self._buffer.keys()):
@@ -213,21 +256,24 @@ class WorkerBase(HealthCheckServer):
         }
         if client_id is not None:
             eof_msg["client_id"] = client_id
-            
-        eof_body = serialize(eof_msg)
-        try:
-            if self.output_exchange and self.output_shards >= 1:
-                self._producer.send_eof_to_all(eof_body)
-            else:
-                self._producer.send(eof_body)
-        except (MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError):
-            self._close_resources()
-            _wait_for_rabbitmq()
-            self._setup_connections()
-            if self.output_exchange and self.output_shards >= 1:
-                self._producer.send_eof_to_all(eof_body)
-            else:
-                self._producer.send(eof_body)
+
+        self._emit_control(eof_msg)
+
+    def _send_checkpoint(self, client_id, checkpoint_id):
+        if self._producer is None:
+            return
+        self._emit_control({
+            "type": "checkpoint",
+            "client_id": client_id,
+            "checkpoint_id": checkpoint_id,
+            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}",
+        })
+
+    def _finish_eof(self, client_id=None):
+        for result in self.on_eof(client_id):
+            self._emit([result])
+        self._flush_all()
+        self._send_eof(client_id)
 
     # --- Loop principal ---------------------------------------------------------
 
@@ -272,27 +318,7 @@ class WorkerBase(HealthCheckServer):
 
                     if len(checkpoint_senders[chk_key]) >= self.n_upstream:
                         self._flush_all()
-                        checkpoint_body = serialize({
-                            "type": "checkpoint",
-                            "client_id": client_id,
-                            "checkpoint_id": checkpoint_id,
-                            "_worker_node_id": f"{self.consumer_group}_{self.shard_id}"
-                        })
-                        
-                        try:
-                            if self.output_exchange and self.output_shards >= 1:
-                                self._producer.send_eof_to_all(checkpoint_body)
-                            elif self._producer:
-                                self._producer.send(checkpoint_body)
-                        except (MessageMiddlewareDisconnectedError, MessageMiddlewareMessageError):
-                            self._close_resources()
-                            _wait_for_rabbitmq()
-                            self._setup_connections()
-                            if self.output_exchange and self.output_shards >= 1:
-                                self._producer.send_eof_to_all(checkpoint_body)
-                            elif self._producer:
-                                self._producer.send(checkpoint_body)
-                                
+                        self._send_checkpoint(client_id, checkpoint_id)
                         del checkpoint_senders[chk_key]
                         completed_checkpoints.add(chk_key)
                     ack()
@@ -303,6 +329,9 @@ class WorkerBase(HealthCheckServer):
 
                     if client_id is None:
                         if sender_id in eof_global_senders:
+                            if len(eof_global_senders) >= self.n_upstream:
+                                self._finish_eof(None)
+                                self._consumer.stop_consuming()
                             ack()
                             return
                         
@@ -311,14 +340,11 @@ class WorkerBase(HealthCheckServer):
                         current_eof_count = len(eof_global_senders)
                         logger.info(f"{self.__class__.__name__} EOF global recibido ({current_eof_count}/{self.n_upstream})")
                         
-                        ack()
                         if current_eof_count >= self.n_upstream:
-                            for result in self.on_eof(None):
-                                self._emit([result])
-                            self._flush_all()
-                            self._send_eof(None)
+                            self._finish_eof(None)
                             self._consumer.stop_consuming()
                             logger.info(f"{self.__class__.__name__} terminado globalmente")
+                        ack()
                         return
 
                     if client_id in done_clients:
@@ -327,6 +353,9 @@ class WorkerBase(HealthCheckServer):
 
                     eof_client_senders.setdefault(client_id, set())
                     if sender_id in eof_client_senders[client_id]:
+                        if len(eof_client_senders[client_id]) >= self.n_upstream:
+                            self._finish_eof(client_id)
+                            done_clients.add(client_id)
                         ack()
                         return
 
@@ -337,10 +366,7 @@ class WorkerBase(HealthCheckServer):
                     logger.info(f"{self.__class__.__name__} EOF recibido para client_id={client_id} ({current_eof_count}/{self.n_upstream})")
                     
                     if current_eof_count >= self.n_upstream:
-                        for result in self.on_eof(client_id):
-                            self._emit([result])
-                        self._flush_all()
-                        self._send_eof(client_id)
+                        self._finish_eof(client_id)
                         done_clients.add(client_id)
 
                     ack()
