@@ -68,7 +68,6 @@ class Aggregator(WorkerBase):
     def on_batch_complete(self, batch_id: str):
         self._applied_batch_id = batch_id
         self._state_logger.save_state(self._state, self._applied_batch_id)
-        logger.info(f"Batch {batch_id} complete. Estado guardado con {len(self._state)} clientes.")
 
     def on_eof_complete(self, client_id=None):
         if client_id is None:
