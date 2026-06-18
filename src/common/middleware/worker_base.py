@@ -138,6 +138,18 @@ class WorkerBase(HealthCheckServer):
     def on_eof(self, client_id=None) -> list:
         return []
 
+    def on_worker_started(self):
+        pass
+
+    def supports_partial_batch_resume(self) -> bool:
+        return True
+
+    def on_batch_complete(self, batch_id: str):
+        pass
+
+    def on_eof_complete(self, client_id=None):
+        pass
+
     def _routing_key(self, msg: dict) -> str:
         if self.output_exchange and self.output_shards >= 1:
             routing_field = os.environ.get("ROUTING_FIELD")
@@ -308,11 +320,13 @@ class WorkerBase(HealthCheckServer):
         self._flush_all()
         self._send_eof(client_id)
         self._mark_eof_done(client_id)
+        self.on_eof_complete(client_id)
 
     # --- Loop principal ---------------------------------------------------------
 
     def run(self):
         logger.info(f"{self.__class__.__name__} iniciando")
+        self.on_worker_started()
         
         eof_global_senders = self.eof_global_senders
         eof_client_senders = self.eof_client_senders
@@ -415,7 +429,7 @@ class WorkerBase(HealthCheckServer):
                     ack()
                     return
 
-                is_resuming = (msg_hash == self.pending_batch_id)
+                is_resuming = self.supports_partial_batch_resume() and (msg_hash == self.pending_batch_id)
                 rows = msg.get("rows", [])
 
                 if not is_resuming:
@@ -426,13 +440,16 @@ class WorkerBase(HealthCheckServer):
                 for i, row in enumerate(rows):
                     if is_resuming and i < self.processed_tx_count:
                         continue
-                        
+
+                    self._current_msg_hash = msg_hash
+                    self._current_row_index = i
                     processed_data = self.process(row)
                     self._emit(processed_data)
 
-                    if i % 100 == 0 and i > 0:
+                    if self.supports_partial_batch_resume() and i % 100 == 0 and i > 0:
                         self.node_logger.save_batch_state(msg_hash, i, self.last_completed_batch)
 
+                self.on_batch_complete(msg_hash)
                 self.node_logger.save_batch_state(None, 0, msg_hash)
                 self.pending_batch_id = None
                 self.processed_tx_count = 0
