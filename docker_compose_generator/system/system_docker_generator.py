@@ -14,9 +14,44 @@ from .splitter.splitter_docker_service import get_splitter_docker_services
 import csv
 import os
 
+WORKER_LOGS_CLEANER_SERVICE = "worker_logs_cleaner"
+
 def _get_next_config_row(config_file):
     row = next(config_file)
     return row["prefix"], int(row["total_instances"])
+
+def _get_worker_logs_cleaner_service():
+    return {
+        WORKER_LOGS_CLEANER_SERVICE: {
+            "build": {
+                "context": "./src/worker_logs_cleaner",
+            },
+            "environment": [
+                "WORKER_LOGS_DIR=/worker_logs",
+            ],
+            "volumes": [
+                "./worker_logs:/worker_logs",
+            ],
+            "restart": "no",
+        }
+    }
+
+def _depends_on_worker_logs_cleaner(service_name: str, service_config: dict):
+    if service_name in {"rabbitmq", WORKER_LOGS_CLEANER_SERVICE, "chaos_monkey"}:
+        return
+
+    depends_on = service_config.setdefault("depends_on", {})
+    if isinstance(depends_on, list):
+        depends_on = {dependency: {"condition": "service_started"} for dependency in depends_on}
+        service_config["depends_on"] = depends_on
+
+    depends_on[WORKER_LOGS_CLEANER_SERVICE] = {"condition": "service_completed_successfully"}
+
+def _add_worker_logs_cleaner_dependency(system: dict):
+    system = _get_worker_logs_cleaner_service() | system
+    for service_name, service_config in system.items():
+        _depends_on_worker_logs_cleaner(service_name, service_config)
+    return system
 
 def generate_system_docker_compose(total_clients=0):
     system = {}
@@ -458,6 +493,7 @@ def generate_system_docker_compose(total_clients=0):
         system = system | _get_monitor_services(worker_names)
         system = system | _get_chaos_monkey_service()
 
+    system = _add_worker_logs_cleaner_dependency(system)
     return system
 
 def _get_monitor_services(worker_names):
