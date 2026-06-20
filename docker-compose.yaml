@@ -24,8 +24,8 @@ services:
     - SERVER_HOST=gateway
     - SERVER_PORT=7659
     - BATCH_SIZE=5000
-    - TRANSACTIONS_FILE=/datasets/LI-Small_Trans.csv
-    - ACCOUNTS_FILE=/datasets/LI-Small_accounts.csv
+    - TRANSACTIONS_FILE=/datasets/transactions_1M.csv
+    - ACCOUNTS_FILE=/datasets/accounts_1M.csv
     - CLIENT_ID=0
     - RESULTS_DIR=/results
     - BATCH_SIZE=20000
@@ -40,6 +40,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
@@ -66,6 +68,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MONITOR_ID=0
     - SUCCESSORS=monitor_1,monitor_2
@@ -83,6 +87,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MONITOR_ID=1
     - SUCCESSORS=monitor_2,monitor_0
@@ -100,6 +106,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MONITOR_ID=2
     - SUCCESSORS=monitor_0,monitor_1
@@ -119,6 +127,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=2
@@ -129,6 +139,8 @@ services:
     - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
     - TOTAL_CLIENTS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q1_data_reducer_1:
     build:
       context: ./src
@@ -137,6 +149,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=2
@@ -147,6 +161,8 @@ services:
     - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
     - TOTAL_CLIENTS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q1_data_reducer_2:
     build:
       context: ./src
@@ -155,6 +171,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=2
@@ -165,6 +183,8 @@ services:
     - OUTPUT_SHARDS=2
     - KEEP_COLUMNS=From Bank,Account,To Bank,Account.1,Amount Paid
     - TOTAL_CLIENTS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q1_filter_lt_50_0:
     build:
       context: ./src
@@ -173,6 +193,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -186,6 +208,8 @@ services:
     - FILTER_VALUE=50
     - TOTAL_CLIENTS=1
     - BATCH_SIZE=5000
+    volumes:
+    - ./worker_logs:/worker_logs
   q1_filter_lt_50_1:
     build:
       context: ./src
@@ -194,6 +218,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -207,6 +233,8 @@ services:
     - FILTER_VALUE=50
     - TOTAL_CLIENTS=1
     - BATCH_SIZE=5000
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_aggregator_0:
     build:
       context: ./src
@@ -215,12 +243,14 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q2_reduced_exc
     - CONSUMER_GROUP=q2_aggregator
     - SHARD_ID=0
+    - INPUT_EXCHANGE=q2_reduced_exc
     - N_UPSTREAM=2
     - OUTPUT_EXCHANGE=q2_results_formatter
     - AGG_OP=max
@@ -230,6 +260,8 @@ services:
     - TOTAL_CLIENTS=1
     - BATCH_SIZE=5000
     - OUTPUT_SHARDS=2
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_aggregator_1:
     build:
       context: ./src
@@ -238,12 +270,14 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q2_reduced_exc
     - CONSUMER_GROUP=q2_aggregator
     - SHARD_ID=1
+    - INPUT_EXCHANGE=q2_reduced_exc
     - N_UPSTREAM=2
     - OUTPUT_EXCHANGE=q2_results_formatter
     - AGG_OP=max
@@ -253,6 +287,8 @@ services:
     - TOTAL_CLIENTS=1
     - BATCH_SIZE=5000
     - OUTPUT_SHARDS=2
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_banks_name_adder_0:
     build:
       context: ./src
@@ -261,6 +297,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
@@ -275,6 +313,8 @@ services:
     - SECONDARY_OUTPUT_QUEUE=results_2
     - MAIN_EOF_DEST=SECONDARY
     - SEC_EOF_DEST=NONE
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_banks_name_adder_1:
     build:
       context: ./src
@@ -283,6 +323,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
@@ -297,6 +339,8 @@ services:
     - SECONDARY_OUTPUT_QUEUE=results_2
     - MAIN_EOF_DEST=SECONDARY
     - SEC_EOF_DEST=NONE
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_data_reducer_0:
     build:
       context: ./src
@@ -305,6 +349,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=3
@@ -316,6 +362,8 @@ services:
     - KEEP_COLUMNS=From Bank,Account,Amount Paid
     - TOTAL_CLIENTS=1
     - ROUTING_FIELD=From Bank
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_data_reducer_1:
     build:
       context: ./src
@@ -324,6 +372,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=3
@@ -335,6 +385,8 @@ services:
     - KEEP_COLUMNS=From Bank,Account,Amount Paid
     - TOTAL_CLIENTS=1
     - ROUTING_FIELD=From Bank
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_splitter_by_bank_0:
     build:
       context: ./src
@@ -343,6 +395,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - /app/splitter.py
@@ -358,6 +412,8 @@ services:
     - SHARD_KEY_FIELD=From Bank
     - TOTAL_CLIENTS=1
     - NORMALIZE_NUMERIC_KEY=true
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_splitter_by_bank_1:
     build:
       context: ./src
@@ -366,6 +422,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - /app/splitter.py
@@ -381,6 +439,8 @@ services:
     - SHARD_KEY_FIELD=From Bank
     - TOTAL_CLIENTS=1
     - NORMALIZE_NUMERIC_KEY=true
+    volumes:
+    - ./worker_logs:/worker_logs
   q2_splitter_by_bank_2:
     build:
       context: ./src
@@ -389,6 +449,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - /app/splitter.py
@@ -404,6 +466,8 @@ services:
     - SHARD_KEY_FIELD=From Bank
     - TOTAL_CLIENTS=1
     - NORMALIZE_NUMERIC_KEY=true
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_avg_aggregators_preceding_period_0:
     build:
       context: ./src
@@ -412,12 +476,14 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q3_split_by_payment_method_exc
     - CONSUMER_GROUP=q3_avg_aggregators_preceding_period
     - SHARD_ID=0
+    - INPUT_EXCHANGE=q3_split_by_payment_method_exc
     - N_UPSTREAM=3
     - OUTPUT_EXCHANGE=q3_avg_preceding_period_exc
     - AGG_OP=avg
@@ -425,6 +491,8 @@ services:
     - KEY_FIELD=Payment Format
     - ROUTING_FIELD=Payment Format
     - OUTPUT_SHARDS=3
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_avg_aggregators_preceding_period_1:
     build:
       context: ./src
@@ -433,12 +501,14 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q3_split_by_payment_method_exc
     - CONSUMER_GROUP=q3_avg_aggregators_preceding_period
     - SHARD_ID=1
+    - INPUT_EXCHANGE=q3_split_by_payment_method_exc
     - N_UPSTREAM=3
     - OUTPUT_EXCHANGE=q3_avg_preceding_period_exc
     - AGG_OP=avg
@@ -446,6 +516,8 @@ services:
     - KEY_FIELD=Payment Format
     - ROUTING_FIELD=Payment Format
     - OUTPUT_SHARDS=3
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_avg_aggregators_preceding_period_2:
     build:
       context: ./src
@@ -454,12 +526,14 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q3_split_by_payment_method_exc
     - CONSUMER_GROUP=q3_avg_aggregators_preceding_period
     - SHARD_ID=2
+    - INPUT_EXCHANGE=q3_split_by_payment_method_exc
     - N_UPSTREAM=3
     - OUTPUT_EXCHANGE=q3_avg_preceding_period_exc
     - AGG_OP=avg
@@ -467,6 +541,8 @@ services:
     - KEY_FIELD=Payment Format
     - ROUTING_FIELD=Payment Format
     - OUTPUT_SHARDS=3
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_avg_and_transactions_joiner_0:
     build:
       context: ./src
@@ -475,6 +551,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
@@ -488,6 +566,8 @@ services:
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
     - BATCH_SIZE=10000
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_avg_and_transactions_joiner_1:
     build:
       context: ./src
@@ -496,6 +576,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
@@ -509,6 +591,8 @@ services:
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
     - BATCH_SIZE=10000
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_avg_and_transactions_joiner_2:
     build:
       context: ./src
@@ -517,6 +601,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
@@ -530,6 +616,8 @@ services:
     - SECONDARY_N_UPSTREAM=3
     - MAIN_OUTPUT_QUEUE=results_3
     - BATCH_SIZE=10000
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_data_reducer_0:
     build:
       context: ./src
@@ -538,6 +626,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=2
@@ -547,6 +637,8 @@ services:
     - OUTPUT_EXCHANGE=q3_reduced_data_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,From Bank,Account,Amount Paid,Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_data_reducer_1:
     build:
       context: ./src
@@ -555,6 +647,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=2
@@ -564,6 +658,8 @@ services:
     - OUTPUT_EXCHANGE=q3_reduced_data_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,From Bank,Account,Amount Paid,Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_data_reducer_2:
     build:
       context: ./src
@@ -572,6 +668,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=2
@@ -581,6 +679,8 @@ services:
     - OUTPUT_EXCHANGE=q3_reduced_data_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,From Bank,Account,Amount Paid,Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_filter_01092022_05092022_0:
     build:
       context: ./src
@@ -589,6 +689,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -601,6 +703,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_filter_01092022_05092022_1:
     build:
       context: ./src
@@ -609,6 +713,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -621,6 +727,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_filter_01092022_05092022_2:
     build:
       context: ./src
@@ -629,6 +737,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -641,6 +751,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_filter_06092022_15092022_0:
     build:
       context: ./src
@@ -649,6 +761,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -662,6 +776,8 @@ services:
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/06", "2022/09/14"]
     - ROUTING_FIELD=Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_filter_06092022_15092022_1:
     build:
       context: ./src
@@ -670,6 +786,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -683,6 +801,8 @@ services:
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/06", "2022/09/14"]
     - ROUTING_FIELD=Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_filter_06092022_15092022_2:
     build:
       context: ./src
@@ -691,6 +811,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -704,6 +826,8 @@ services:
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/06", "2022/09/14"]
     - ROUTING_FIELD=Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_splitter_by_payment_method_0:
     build:
       context: ./src
@@ -712,6 +836,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - /app/splitter.py
@@ -725,6 +851,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=3
     - SHARD_KEY_FIELD=Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_splitter_by_payment_method_1:
     build:
       context: ./src
@@ -733,6 +861,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - /app/splitter.py
@@ -746,6 +876,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=3
     - SHARD_KEY_FIELD=Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q3_splitter_by_payment_method_2:
     build:
       context: ./src
@@ -754,6 +886,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - /app/splitter.py
@@ -767,6 +901,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=3
     - SHARD_KEY_FIELD=Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_data_reducer_0:
     build:
       context: ./src
@@ -775,6 +911,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=2
@@ -784,6 +922,8 @@ services:
     - OUTPUT_EXCHANGE=q4_reduced_data_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_data_reducer_1:
     build:
       context: ./src
@@ -792,6 +932,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=2
@@ -801,6 +943,8 @@ services:
     - OUTPUT_EXCHANGE=q4_reduced_data_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_data_reducer_2:
     build:
       context: ./src
@@ -809,6 +953,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=2
@@ -818,6 +964,8 @@ services:
     - OUTPUT_EXCHANGE=q4_reduced_data_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,From Bank,Account,To Bank,Account.1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_filter_01092022_05092022_prefix_0:
     build:
       context: ./src
@@ -826,6 +974,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -838,6 +988,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_filter_01092022_05092022_prefix_1:
     build:
       context: ./src
@@ -846,6 +998,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -858,6 +1012,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_filter_01092022_05092022_prefix_2:
     build:
       context: ./src
@@ -866,6 +1022,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -878,6 +1036,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_inc_edges_filter_0:
     build:
       context: ./src
@@ -886,6 +1046,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - incoming_edges_filter.py
@@ -898,6 +1060,8 @@ services:
     - SHARD_ID=0
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_inc_edges_filter_1:
     build:
       context: ./src
@@ -906,6 +1070,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - incoming_edges_filter.py
@@ -918,6 +1084,8 @@ services:
     - SHARD_ID=1
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_inc_edges_filter_2:
     build:
       context: ./src
@@ -926,6 +1094,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - incoming_edges_filter.py
@@ -938,6 +1108,8 @@ services:
     - SHARD_ID=2
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_inc_edges_filter_3:
     build:
       context: ./src
@@ -946,6 +1118,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - incoming_edges_filter.py
@@ -958,6 +1132,8 @@ services:
     - SHARD_ID=3
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_out_edges_filter_0:
     build:
       context: ./src
@@ -966,6 +1142,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - outgoing_edges_filter.py
@@ -978,6 +1156,8 @@ services:
     - SHARD_ID=0
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_out_edges_filter_1:
     build:
       context: ./src
@@ -986,6 +1166,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - outgoing_edges_filter.py
@@ -998,6 +1180,8 @@ services:
     - SHARD_ID=1
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_out_edges_filter_2:
     build:
       context: ./src
@@ -1006,6 +1190,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - outgoing_edges_filter.py
@@ -1018,6 +1204,8 @@ services:
     - SHARD_ID=2
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_out_edges_filter_3:
     build:
       context: ./src
@@ -1026,6 +1214,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - outgoing_edges_filter.py
@@ -1038,6 +1228,8 @@ services:
     - SHARD_ID=3
     - OUTPUT_EXCHANGE=q4_candidates_edges_exc
     - OUTPUT_SHARDS=4
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_paths_aggregator_0:
     build:
       context: ./src
@@ -1046,6 +1238,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - paths_aggregator.py
@@ -1059,6 +1253,8 @@ services:
     - OUTPUT_QUEUE=results_4
     - TOTAL_CLIENTS=1
     - BATCH_SIZE=1000
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_paths_creators_0:
     build:
       context: ./src
@@ -1067,6 +1263,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - paths_creator.py
@@ -1079,6 +1277,8 @@ services:
     - SHARD_ID=0
     - OUTPUT_EXCHANGE=q4_paths_exc
     - OUTPUT_SHARDS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_paths_creators_1:
     build:
       context: ./src
@@ -1087,6 +1287,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - paths_creator.py
@@ -1099,6 +1301,8 @@ services:
     - SHARD_ID=1
     - OUTPUT_EXCHANGE=q4_paths_exc
     - OUTPUT_SHARDS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_paths_creators_2:
     build:
       context: ./src
@@ -1107,6 +1311,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - paths_creator.py
@@ -1119,6 +1325,8 @@ services:
     - SHARD_ID=2
     - OUTPUT_EXCHANGE=q4_paths_exc
     - OUTPUT_SHARDS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_paths_creators_3:
     build:
       context: ./src
@@ -1127,6 +1335,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - paths_creator.py
@@ -1139,6 +1349,8 @@ services:
     - SHARD_ID=3
     - OUTPUT_EXCHANGE=q4_paths_exc
     - OUTPUT_SHARDS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_splitters_by_origin_and_dest_inc_0:
     build:
       context: ./src
@@ -1147,6 +1359,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - /app/splitter.py
@@ -1160,6 +1374,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
     - SHARD_KEY_FIELDS=To Bank,Account.1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_splitters_by_origin_and_dest_inc_1:
     build:
       context: ./src
@@ -1168,6 +1384,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - /app/splitter.py
@@ -1181,6 +1399,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
     - SHARD_KEY_FIELDS=To Bank,Account.1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_splitters_by_origin_and_dest_inc_2:
     build:
       context: ./src
@@ -1189,6 +1409,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - /app/splitter.py
@@ -1202,6 +1424,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
     - SHARD_KEY_FIELDS=To Bank,Account.1
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_splitters_by_origin_and_dest_out_0:
     build:
       context: ./src
@@ -1210,6 +1434,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - /app/splitter.py
@@ -1223,6 +1449,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
     - SHARD_KEY_FIELDS=From Bank,Account
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_splitters_by_origin_and_dest_out_1:
     build:
       context: ./src
@@ -1231,6 +1459,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - /app/splitter.py
@@ -1244,6 +1474,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
     - SHARD_KEY_FIELDS=From Bank,Account
+    volumes:
+    - ./worker_logs:/worker_logs
   q4_splitters_by_origin_and_dest_out_2:
     build:
       context: ./src
@@ -1252,6 +1484,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - /app/splitter.py
@@ -1265,6 +1499,8 @@ services:
     - N_UPSTREAM=3
     - OUTPUT_SHARDS=4
     - SHARD_KEY_FIELDS=From Bank,Account
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_counter_0:
     build:
       context: ./src
@@ -1273,15 +1509,19 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q5_small_amounts_exc
     - CONSUMER_GROUP=q5_counter
     - SHARD_ID=0
+    - INPUT_EXCHANGE=q5_small_amounts_exc
     - N_UPSTREAM=3
     - OUTPUT_QUEUE=q5_totals_reached
     - AGG_OP=count
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_counter_1:
     build:
       context: ./src
@@ -1290,15 +1530,19 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q5_small_amounts_exc
     - CONSUMER_GROUP=q5_counter
     - SHARD_ID=1
+    - INPUT_EXCHANGE=q5_small_amounts_exc
     - N_UPSTREAM=3
     - OUTPUT_QUEUE=q5_totals_reached
     - AGG_OP=count
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_counter_2:
     build:
       context: ./src
@@ -1307,15 +1551,19 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
-    - INPUT_EXCHANGE=q5_small_amounts_exc
     - CONSUMER_GROUP=q5_counter
     - SHARD_ID=2
+    - INPUT_EXCHANGE=q5_small_amounts_exc
     - N_UPSTREAM=3
     - OUTPUT_QUEUE=q5_totals_reached
     - AGG_OP=count
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_data_reducer_0:
     build:
       context: ./src
@@ -1324,6 +1572,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=1
@@ -1333,6 +1583,8 @@ services:
     - OUTPUT_EXCHANGE=q5_reduced_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,Amount Paid,Payment Currency,Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_data_reducer_1:
     build:
       context: ./src
@@ -1341,6 +1593,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - N_UPSTREAM=1
@@ -1350,6 +1604,8 @@ services:
     - OUTPUT_EXCHANGE=q5_reduced_exc
     - OUTPUT_SHARDS=3
     - KEEP_COLUMNS=Timestamp,Amount Paid,Payment Currency,Payment Format
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_filter_01092022_05092022_0:
     build:
       context: ./src
@@ -1358,6 +1614,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -1370,6 +1628,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_filter_01092022_05092022_1:
     build:
       context: ./src
@@ -1378,6 +1638,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -1390,6 +1652,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_filter_01092022_05092022_2:
     build:
       context: ./src
@@ -1398,6 +1662,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -1410,6 +1676,8 @@ services:
     - FILTER_FIELD=Timestamp
     - FILTER_OP=in
     - FILTER_VALUE=["2022/09/01", "2022/09/05"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_filter_lt_1_usd_0:
     build:
       context: ./src
@@ -1418,6 +1686,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -1430,6 +1700,8 @@ services:
     - FILTER_FIELD=Amount Paid
     - FILTER_OP=lt
     - FILTER_VALUE=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_filter_lt_1_usd_1:
     build:
       context: ./src
@@ -1438,6 +1710,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -1450,6 +1724,8 @@ services:
     - FILTER_FIELD=Amount Paid
     - FILTER_OP=lt
     - FILTER_VALUE=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_filter_lt_1_usd_2:
     build:
       context: ./src
@@ -1458,6 +1734,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -1470,6 +1748,8 @@ services:
     - FILTER_FIELD=Amount Paid
     - FILTER_OP=lt
     - FILTER_VALUE=1
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_money_converter_0:
     build:
       context: ./src
@@ -1478,6 +1758,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
@@ -1497,6 +1779,8 @@ services:
     - TARGET_CURRENCY=US Dollar
     - BATCH_SIZE=1
     - SEC_BATCH_SIZE=5000
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_money_converter_1:
     build:
       context: ./src
@@ -1505,6 +1789,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
@@ -1524,6 +1810,8 @@ services:
     - TARGET_CURRENCY=US Dollar
     - BATCH_SIZE=1
     - SEC_BATCH_SIZE=5000
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_money_converter_2:
     build:
       context: ./src
@@ -1532,6 +1820,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
@@ -1551,6 +1841,8 @@ services:
     - TARGET_CURRENCY=US Dollar
     - BATCH_SIZE=1
     - SEC_BATCH_SIZE=5000
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_money_converter_api_client_0:
     build:
       context: ./src
@@ -1559,6 +1851,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     entrypoint:
     - python3
     - money_converter_api.py
@@ -1570,6 +1864,8 @@ services:
     - INPUT_QUEUE=q5_reqs_currency_rates_api
     - OUTPUT_EXCHANGE=q5_currency_rates_from_api_exc
     - OUTPUT_SHARDS=3
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_payment_fmt_filter_0:
     build:
       context: ./src
@@ -1578,6 +1874,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -1590,6 +1888,8 @@ services:
     - FILTER_FIELD=Payment Format
     - FILTER_OP=in
     - FILTER_VALUE=["Wire", "ACH"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_payment_fmt_filter_1:
     build:
       context: ./src
@@ -1598,6 +1898,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -1610,6 +1912,8 @@ services:
     - FILTER_FIELD=Payment Format
     - FILTER_OP=in
     - FILTER_VALUE=["Wire", "ACH"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_payment_fmt_filter_2:
     build:
       context: ./src
@@ -1618,6 +1922,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -1630,6 +1936,8 @@ services:
     - FILTER_FIELD=Payment Format
     - FILTER_OP=in
     - FILTER_VALUE=["Wire", "ACH"]
+    volumes:
+    - ./worker_logs:/worker_logs
   q5_transaction_counter_0:
     build:
       context: ./src
@@ -1638,15 +1946,21 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - MOM_HOST=rabbitmq
     - PYTHONUNBUFFERED=1
+    - CONSUMER_GROUP=q5_transaction_counter
+    - SHARD_ID=0
     - INPUT_QUEUE=q5_totals_reached
     - N_UPSTREAM=3
     - OUTPUT_QUEUE=results_5
     - AGG_OP=sum
     - AGG_FIELD=count
     - TOTAL_CLIENTS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   rabbitmq:
     container_name: rabbitmq
     environment:
@@ -1669,6 +1983,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -1682,6 +1998,8 @@ services:
     - FILTER_OP=eq
     - FILTER_VALUE=US Dollar
     - TOTAL_CLIENTS=1
+    volumes:
+    - ./worker_logs:/worker_logs
   usd_filter_1:
     build:
       context: ./src
@@ -1690,6 +2008,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
     environment:
     - RABBITMQ_HOST=rabbitmq
     - BATCH_SIZE=5000
@@ -1703,3 +2023,13 @@ services:
     - FILTER_OP=eq
     - FILTER_VALUE=US Dollar
     - TOTAL_CLIENTS=1
+    volumes:
+    - ./worker_logs:/worker_logs
+  worker_logs_cleaner:
+    build:
+      context: ./src/worker_logs_cleaner
+    environment:
+    - WORKER_LOGS_DIR=/worker_logs
+    restart: 'no'
+    volumes:
+    - ./worker_logs:/worker_logs
