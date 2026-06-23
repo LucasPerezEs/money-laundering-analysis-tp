@@ -254,3 +254,26 @@ class BaseNodeLogger:
         for fd in self._buffer_fds.values():
             if not fd.closed:
                 fd.close()
+
+    def append_bulk_to_buffer(self, client_id: Optional[str], buf_key: str, data_list: list):
+        if not data_list:
+            return
+        
+        key = (client_id, buf_key)
+        if key not in self._buffer_fds or self._buffer_fds[key].closed:
+            filepath = self._get_buffer_filepath(client_id, buf_key)
+            self._buffer_fds[key] = open(filepath, 'ab')
+            
+        fd = self._buffer_fds[key]
+        final_bytes = bytearray()
+        
+        for data in data_list:
+            payload = json.dumps(data).encode('utf-8')
+            longitud = len(payload).to_bytes(4, "big")
+            checksum = zlib.crc32(payload).to_bytes(4, "big")
+            final_bytes.extend(longitud)
+            final_bytes.extend(payload)
+            final_bytes.extend(checksum)
+            
+        fd.write(final_bytes)
+        fd.flush()
