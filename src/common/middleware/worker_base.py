@@ -196,12 +196,12 @@ class WorkerBase(HealthCheckServer):
             return
 
         bulk_data = {}
+        client_id = self._outbox_client_id(results[0])
         for msg in results:
             buf_key = self._buffer_key(msg)
-            client_id = self._outbox_client_id(msg)
-            bulk_data.setdefault((client_id, buf_key), []).append(msg)
+            bulk_data.setdefault(buf_key, []).append(msg)
 
-        for (client_id, buf_key), msgs in bulk_data.items():
+        for buf_key, msgs in bulk_data.items():
             if hasattr(self, "node_logger"):
                 self.node_logger.append_bulk_to_buffer(client_id, buf_key, msgs)
 
