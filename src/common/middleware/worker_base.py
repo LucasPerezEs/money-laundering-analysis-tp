@@ -68,7 +68,8 @@ class WorkerBase(HealthCheckServer):
 
         (self.pending_batch_id, 
          self.processed_tx_count, 
-         self.last_completed_batch) = self.node_logger.recover_batch_state()
+         self.last_completed_batch,
+         self.saved_buffer_sizes) = self.node_logger.recover_batch_state()
 
         recovered_buffers = self.node_logger.load_all_buffers()
         for (client_id, buf_key), msgs in recovered_buffers.items():
@@ -126,18 +127,20 @@ class WorkerBase(HealthCheckServer):
         time.sleep(delay)
 
     def _reconcile_state(self):
-        real_count = sum(len(msgs) for msgs in self._buffer.values())
-        if self.pending_batch_id and real_count > self.processed_tx_count:
-            logger.warning(
-                f"Reconciliación: Log tiene {real_count} regs, Estado dice {self.processed_tx_count}. "
-                f"Ajustando a {real_count}."
-            )
-            self.node_logger.save_batch_state(
-                self.pending_batch_id, 
-                real_count, 
-                self.last_completed_batch
-            )
-            self.processed_tx_count = real_count
+        if not self.pending_batch_id:
+            return
+
+        for buf_key, msgs in self._buffer.items():
+            expected_size = self.saved_buffer_sizes.get(buf_key, 0)
+            real_size = len(msgs)
+
+            if real_size > expected_size:
+                orphans = real_size - expected_size
+                logger.warning(
+                    f"Reconciliación: Truncando {orphans} registros huérfanos en '{buf_key}'. "
+                    f"Estado seguro: {expected_size}. Encontrados: {real_size}."
+                )
+                self._buffer[buf_key] = msgs[:expected_size]
 
     def _handle_sigterm(self, *_):
         logger.info("SIGTERM recibido -> cerrando")
@@ -205,10 +208,15 @@ class WorkerBase(HealthCheckServer):
             if hasattr(self, "node_logger"):
                 self.node_logger.append_bulk_to_buffer(client_id, buf_key, msgs)
 
-            for msg in msgs:
+            for i, msg in enumerate(msgs):
                 self._buffer.setdefault(buf_key, []).append(msg)
+                
                 if len(self._buffer[buf_key]) >= self.batch_size:
                     self._flush_key(buf_key)
+
+                    remainder = msgs[i+1:]
+                    if remainder and hasattr(self, "node_logger"):
+                        self.node_logger.append_bulk_to_buffer(client_id, buf_key, remainder)
 
     def _flush_key(self, buf_key: str):
         records = self._buffer.pop(buf_key, [])
@@ -487,12 +495,13 @@ class WorkerBase(HealthCheckServer):
                         self._emit(chunk_results)
 
                         if self.supports_partial_batch_resume() and not is_last_row:
-                            self.node_logger.save_batch_state(msg_hash, i, self.last_completed_batch)
-                            
+                            current_sizes = {k: len(v) for k, v in self._buffer.items()}
+                            self.node_logger.save_batch_state(msg_hash, i, self.last_completed_batch, current_sizes)
+
                         chunk_results.clear()
 
                 self.on_batch_complete(msg_hash)
-                self.node_logger.save_batch_state(None, 0, msg_hash)
+                self.node_logger.save_batch_state(None, 0, msg_hash, {})
                 self.pending_batch_id = None
                 self.processed_tx_count = 0
                 self.last_completed_batch = msg_hash

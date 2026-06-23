@@ -67,21 +67,21 @@ class BaseNodeLogger:
                 except json.JSONDecodeError:
                     break
 
-    def save_batch_state(self, batch_id: Optional[str], index: int, last_completed: Optional[str] = None):
+    def save_batch_state(self, batch_id: Optional[str], index: int, last_completed: Optional[str] = None, buffer_sizes: dict = None):
         tmp_path = self.batch_state_filepath + ".tmp"
         with open(tmp_path, "w") as f:
-            json.dump({"batch_id": batch_id, "index": index, "last_completed": last_completed}, f)
+            json.dump({"batch_id": batch_id, "index": index, "last_completed": last_completed, "buffer_sizes": buffer_sizes or {}}, f)
         os.replace(tmp_path, self.batch_state_filepath)
 
-    def recover_batch_state(self) -> Tuple[Optional[str], int, Optional[str]]:
+    def recover_batch_state(self) -> Tuple[Optional[str], int, Optional[str], dict]:
         if not os.path.exists(self.batch_state_filepath):
-            return None, 0, None
+            return None, 0, None, {}
         try:
             with open(self.batch_state_filepath, "r") as f:
                 state = json.load(f)
-                return state.get("batch_id"), state.get("index", 0), state.get("last_completed")
+                return state.get("batch_id"), state.get("index", 0), state.get("last_completed"), state.get("buffer_sizes", {})
         except (json.JSONDecodeError, IOError):
-            return None, 0, None
+            return None, 0, None, {}
 
     def log_eof(self, client_id: Optional[str], emitter_id: str):
         self._write_in_file(self._eof_fd, {
