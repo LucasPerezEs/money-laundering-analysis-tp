@@ -22,19 +22,9 @@ allowed_services: []
 # Allowlist por regex. Solo estos servicios pueden ser interrumpidos.
 allowed_patterns:
   # Base WorkerBase: filtros y reducers simples.
-  # Base WorkerBase: filtros y reducers simples.
   - "^usd_filter_"
   - "^q[1-5]_filter_"
   - "^q[1-5]_data_reducer_"
-
-  # Aggregator generico con estado persistido.
-  - "^q2_aggregator_"
-  - "^q3_avg_aggregators_preceding_period_"
-  - "^q5_counter_"
-  - "^q5_transaction_counter_"
-
-  # Splitters sin estado propio complejo.
-  - "^q2_splitter_by_bank_"
 
   # Aggregator generico con estado persistido.
   - "^q2_aggregator_"
@@ -50,6 +40,13 @@ allowed_patterns:
   - "^q2_banks_name_adder_"
   - "^q3_avg_and_transactions_joiner_"
   - "^q5_money_converter_"
+
+  # Q4 graph nodes con estado persistido.
+  - "^q4_inc_edges_filter_"
+  - "^q4_out_edges_filter_"
+  - "^q4_paths_creators_"
+  - "^q4_paths_aggregator_"
+
   - "^monitor_"
 
 # Servicios criticos que no queremos detener por defecto.
