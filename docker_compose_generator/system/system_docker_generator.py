@@ -53,6 +53,31 @@ def _add_worker_logs_cleaner_dependency(system: dict):
         _depends_on_worker_logs_cleaner(service_name, service_config)
     return system
 
+def _get_q2_accounts_parser_services(prefix, total_instances, input_exchange, output_exchange, output_shards, total_clients=1):
+    services = {}
+    for i in range(total_instances):
+        name = f"{prefix}_{i}"
+        services[name] = {
+            "build": {"context": "./src", "dockerfile": "q2_accounts_parser/Dockerfile"},
+            "container_name": name,
+            "depends_on": {"rabbitmq": {"condition": "service_healthy"}},
+            "environment": [
+                "RABBITMQ_HOST=rabbitmq",
+                "PYTHONUNBUFFERED=1",
+                "BATCH_SIZE=5000",
+                "N_UPSTREAM=1",
+                f"INPUT_EXCHANGE={input_exchange}",
+                f"CONSUMER_GROUP={prefix}",
+                f"SHARD_ID={i}",
+                f"OUTPUT_EXCHANGE={output_exchange}",
+                f"OUTPUT_SHARDS={output_shards}",
+                "ROUTING_FIELD=bank_id",
+                f"TOTAL_CLIENTS={total_clients}",
+            ],
+            "volumes": ["./worker_logs:/worker_logs"],
+        }
+    return services
+
 def generate_system_docker_compose(total_clients=0):
     system = {}
 
@@ -75,6 +100,8 @@ def generate_system_docker_compose(total_clients=0):
         q2_reducer_prefix, q2_reducer_instances = _get_next_config_row(config_file_reader)
         q2_aggregator_prefix, q2_aggregator_instances = _get_next_config_row(config_file_reader)
         q2_bank_names_adder_prefix, q2_bank_names_adder_instances = _get_next_config_row(config_file_reader)
+        q2_accounts_parser_prefix, q2_accounts_parser_instances = _get_next_config_row(config_file_reader)  
+
 
         q3_data_reducer_prefix, q3_data_reducer_instances = _get_next_config_row(config_file_reader)
         q3_filter_06092022_15092022_prefix, q3_filter_06092022_15092022_instances = _get_next_config_row(config_file_reader)
@@ -106,11 +133,13 @@ def generate_system_docker_compose(total_clients=0):
             input_query_queue_prefix="results",
             total_queries=5,
             output_exchange="gateway_exc",
-            banks_out_exch="q2_banks_exchange",
+            accounts_out_exch="accounts_exc",
+            accounts_out_shards=q2_accounts_parser_instances,
         )
 
+    
         gateway["gateway"]["environment"].append(f"OUTPUT_SHARDS={usd_instances}")
-        gateway["gateway"]["environment"].append(f"BANK_OUTPUT_SHARDS={q2_bank_names_adder_instances}")
+        # gateway["gateway"]["environment"].append(f"BANK_OUTPUT_SHARDS={q2_bank_names_adder_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_1_N_UPSTREAM={filter_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_2_N_UPSTREAM={q2_aggregator_instances}")
         gateway["gateway"]["environment"].append(f"QUERY_3_N_UPSTREAM={q3_avg_and_transactions_joiner_instances}")
@@ -213,7 +242,15 @@ def generate_system_docker_compose(total_clients=0):
             sec_output_queue="results_2",
         )
         system = system | q2_bank_names_adders
-
+        
+        q2_accounts_parsers = _get_q2_accounts_parser_services(
+            q2_accounts_parser_prefix, q2_accounts_parser_instances,
+            input_exchange="accounts_exc",
+            output_exchange="q2_banks_exchange",
+            output_shards=q2_bank_names_adder_instances,
+            total_clients=total_clients,
+        )
+        system = system | q2_accounts_parsers
         # =========================================================
         # QUERY 3
         # =========================================================
