@@ -136,7 +136,13 @@ class Aggregator(WorkerBase):
 
     def on_clean_client_data(self, client_id=None):
         if client_id is not None:
-            pass
+            # Clean state of RAM
+            if client_id in self._state:
+                del self._state[client_id]
+
+            # Clean data on logger
+            self._state_logger.clear_client_state(client_id)
+
 
     def _build_result(self, key, acc, client_id):
         result = {}
