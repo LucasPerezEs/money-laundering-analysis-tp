@@ -544,6 +544,7 @@ class WorkerBase(HealthCheckServer):
                                 del self.clean_senders[client_id]
                                 logger.info(f"Limpieza finalizada para cliente {client_id}")
 
+                    ack()
                     return
 
                 is_resuming = self.supports_partial_batch_resume() and (msg_hash == self.pending_batch_id)
