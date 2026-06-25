@@ -179,7 +179,14 @@ class MoneyConverter(WorkerBaseDoubleIO):
         return rates
 
     def _generate_consult_currency_rate(self, timestamp, origin_curr, dest_curr):
-        return {"timestamp": timestamp, "origin": origin_curr, "destination": dest_curr, "sender_id": self.shard_id}
+        request_id = f"{timestamp}_{origin_curr}_{dest_curr}"
+        return {
+            "request_id": request_id,
+            "timestamp": timestamp,
+            "origin": origin_curr,
+            "destination": dest_curr,
+            "sender_id": self.shard_id,
+        }
 
     def process_main_input(self, data: dict) -> tuple[list, list]:
         # Get data elements
@@ -265,12 +272,16 @@ class MoneyConverter(WorkerBaseDoubleIO):
             origin_code = data["origin"]
             target_code = data["destination"]
             currency_rate = data["conversion_rate"]
-            rate_key = f"{day}_{origin_code}_{target_code}"
+            rate_key = data.get("request_id") or f"{day}_{origin_code}_{target_code}"
 
             with self._shared_lock:
+                already_cached = rate_key in self._shared_cache
                 self._shared_cache[rate_key] = currency_rate
                 pending_dict = self._normalize_pending(self._shared_pending.pop(rate_key, {}))
                 self._sec_state_dirty = True
+
+            if not pending_dict and already_cached:
+                logging.info("MoneyConverter ignora respuesta duplicada para rate_key=%s", rate_key)
 
             for row_id, row in pending_dict.items():
                 amount_in = row["Amount Paid"]

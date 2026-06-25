@@ -473,7 +473,8 @@ def generate_system_docker_compose(total_clients=0):
             q5_money_converters_prefix, q5_money_converters_instances, "US Dollar",
             main_input_exchange="q5_converter_to_usd_exc",
             sec_input_exchange="q5_currency_rates_from_api_exc",
-            main_output_queue="q5_reqs_currency_rates_api",
+            main_output_exchange="q5_reqs_currency_rates_api_exc",
+            main_output_shards=q5_money_converter_api_client_instances,
             sec_output_exchange="q5_converted_amounts_exc",
             main_n_upstream=q5_payment_fmt_filters_instances,
             sec_n_upstream=q5_money_converter_api_client_instances,
@@ -482,11 +483,12 @@ def generate_system_docker_compose(total_clients=0):
         for name, config in q5_money_converters.items():
             config["environment"].append("BATCH_SIZE=1000")
             config["environment"].append("SEC_BATCH_SIZE=5000")
+            config["environment"].append("ROUTING_FIELD=request_id")
         system = system | q5_money_converters
 
         q5_money_converters_api_client = get_money_conversion_api_client_docker_services(
             q5_money_converter_api_client_prefix, q5_money_converter_api_client_instances,
-            input_queue="q5_reqs_currency_rates_api",
+            input_exchange="q5_reqs_currency_rates_api_exc",
             output_exchange="q5_currency_rates_from_api_exc",
             output_shards=q5_money_converters_instances,
             n_upstream=q5_money_converters_instances,

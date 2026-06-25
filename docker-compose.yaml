@@ -83,7 +83,7 @@ services:
     - CHECK_INTERVAL=10
     - HEALTH_TIMEOUT=50
     - MAX_FAILURES=4
-    - WORKERS=usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q2_banks_name_adder_0,q2_banks_name_adder_1,q2_accounts_parser_0,q2_accounts_parser_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_out_0,q4_splitters_by_origin_and_dest_out_1,q4_splitters_by_origin_and_dest_out_2,q4_out_edges_filter_0,q4_out_edges_filter_1,q4_out_edges_filter_2,q4_out_edges_filter_3,q4_splitters_by_origin_and_dest_inc_0,q4_splitters_by_origin_and_dest_inc_1,q4_splitters_by_origin_and_dest_inc_2,q4_inc_edges_filter_0,q4_inc_edges_filter_1,q4_inc_edges_filter_2,q4_inc_edges_filter_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_aggregator_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0,monitor_0,monitor_1,monitor_2
+    - WORKERS=usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q2_banks_name_adder_0,q2_banks_name_adder_1,q2_accounts_parser_0,q2_accounts_parser_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_out_0,q4_splitters_by_origin_and_dest_out_1,q4_splitters_by_origin_and_dest_out_2,q4_out_edges_filter_0,q4_out_edges_filter_1,q4_out_edges_filter_2,q4_out_edges_filter_3,q4_splitters_by_origin_and_dest_inc_0,q4_splitters_by_origin_and_dest_inc_1,q4_splitters_by_origin_and_dest_inc_2,q4_inc_edges_filter_0,q4_inc_edges_filter_1,q4_inc_edges_filter_2,q4_inc_edges_filter_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_aggregator_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_money_converter_api_client_1,q5_money_converter_api_client_2,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0,monitor_0,monitor_1,monitor_2
     restart: unless-stopped
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
@@ -105,7 +105,7 @@ services:
     - CHECK_INTERVAL=10
     - HEALTH_TIMEOUT=50
     - MAX_FAILURES=4
-    - WORKERS=usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q2_banks_name_adder_0,q2_banks_name_adder_1,q2_accounts_parser_0,q2_accounts_parser_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_out_0,q4_splitters_by_origin_and_dest_out_1,q4_splitters_by_origin_and_dest_out_2,q4_out_edges_filter_0,q4_out_edges_filter_1,q4_out_edges_filter_2,q4_out_edges_filter_3,q4_splitters_by_origin_and_dest_inc_0,q4_splitters_by_origin_and_dest_inc_1,q4_splitters_by_origin_and_dest_inc_2,q4_inc_edges_filter_0,q4_inc_edges_filter_1,q4_inc_edges_filter_2,q4_inc_edges_filter_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_aggregator_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0,monitor_0,monitor_1,monitor_2
+    - WORKERS=usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q2_banks_name_adder_0,q2_banks_name_adder_1,q2_accounts_parser_0,q2_accounts_parser_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_out_0,q4_splitters_by_origin_and_dest_out_1,q4_splitters_by_origin_and_dest_out_2,q4_out_edges_filter_0,q4_out_edges_filter_1,q4_out_edges_filter_2,q4_out_edges_filter_3,q4_splitters_by_origin_and_dest_inc_0,q4_splitters_by_origin_and_dest_inc_1,q4_splitters_by_origin_and_dest_inc_2,q4_inc_edges_filter_0,q4_inc_edges_filter_1,q4_inc_edges_filter_2,q4_inc_edges_filter_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_aggregator_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_money_converter_api_client_1,q5_money_converter_api_client_2,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0,monitor_0,monitor_1,monitor_2
     restart: unless-stopped
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
@@ -127,7 +127,7 @@ services:
     - CHECK_INTERVAL=10
     - HEALTH_TIMEOUT=50
     - MAX_FAILURES=4
-    - WORKERS=usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q2_banks_name_adder_0,q2_banks_name_adder_1,q2_accounts_parser_0,q2_accounts_parser_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_out_0,q4_splitters_by_origin_and_dest_out_1,q4_splitters_by_origin_and_dest_out_2,q4_out_edges_filter_0,q4_out_edges_filter_1,q4_out_edges_filter_2,q4_out_edges_filter_3,q4_splitters_by_origin_and_dest_inc_0,q4_splitters_by_origin_and_dest_inc_1,q4_splitters_by_origin_and_dest_inc_2,q4_inc_edges_filter_0,q4_inc_edges_filter_1,q4_inc_edges_filter_2,q4_inc_edges_filter_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_aggregator_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0,monitor_0,monitor_1,monitor_2
+    - WORKERS=usd_filter_0,usd_filter_1,q1_data_reducer_0,q1_data_reducer_1,q1_data_reducer_2,q1_filter_lt_50_0,q1_filter_lt_50_1,q2_splitter_by_bank_0,q2_splitter_by_bank_1,q2_splitter_by_bank_2,q2_data_reducer_0,q2_data_reducer_1,q2_aggregator_0,q2_aggregator_1,q2_banks_name_adder_0,q2_banks_name_adder_1,q2_accounts_parser_0,q2_accounts_parser_1,q3_data_reducer_0,q3_data_reducer_1,q3_data_reducer_2,q3_filter_06092022_15092022_0,q3_filter_06092022_15092022_1,q3_filter_06092022_15092022_2,q3_filter_01092022_05092022_0,q3_filter_01092022_05092022_1,q3_filter_01092022_05092022_2,q3_splitter_by_payment_method_0,q3_splitter_by_payment_method_1,q3_splitter_by_payment_method_2,q3_avg_aggregators_preceding_period_0,q3_avg_aggregators_preceding_period_1,q3_avg_aggregators_preceding_period_2,q3_avg_and_transactions_joiner_0,q3_avg_and_transactions_joiner_1,q3_avg_and_transactions_joiner_2,q4_data_reducer_0,q4_data_reducer_1,q4_data_reducer_2,q4_filter_01092022_05092022_prefix_0,q4_filter_01092022_05092022_prefix_1,q4_filter_01092022_05092022_prefix_2,q4_splitters_by_origin_and_dest_out_0,q4_splitters_by_origin_and_dest_out_1,q4_splitters_by_origin_and_dest_out_2,q4_out_edges_filter_0,q4_out_edges_filter_1,q4_out_edges_filter_2,q4_out_edges_filter_3,q4_splitters_by_origin_and_dest_inc_0,q4_splitters_by_origin_and_dest_inc_1,q4_splitters_by_origin_and_dest_inc_2,q4_inc_edges_filter_0,q4_inc_edges_filter_1,q4_inc_edges_filter_2,q4_inc_edges_filter_3,q4_paths_creators_0,q4_paths_creators_1,q4_paths_creators_2,q4_paths_creators_3,q4_paths_aggregator_0,q5_data_reducer_0,q5_data_reducer_1,q5_filter_01092022_05092022_0,q5_filter_01092022_05092022_1,q5_filter_01092022_05092022_2,q5_payment_fmt_filter_0,q5_payment_fmt_filter_1,q5_payment_fmt_filter_2,q5_money_converter_0,q5_money_converter_1,q5_money_converter_2,q5_money_converter_api_client_0,q5_money_converter_api_client_1,q5_money_converter_api_client_2,q5_filter_lt_1_usd_0,q5_filter_lt_1_usd_1,q5_filter_lt_1_usd_2,q5_counter_0,q5_counter_1,q5_counter_2,q5_transaction_counter_0,monitor_0,monitor_1,monitor_2
     restart: unless-stopped
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
@@ -1849,8 +1849,9 @@ services:
     - SECONDARY_INPUT_EXCHANGE=q5_currency_rates_from_api_exc
     - SHARD_ID=0
     - MAIN_N_UPSTREAM=3
-    - SECONDARY_N_UPSTREAM=1
-    - MAIN_OUTPUT_QUEUE=q5_reqs_currency_rates_api
+    - SECONDARY_N_UPSTREAM=3
+    - MAIN_OUTPUT_EXCHANGE=q5_reqs_currency_rates_api_exc
+    - MAIN_OUTPUT_SHARDS=3
     - SECONDARY_OUTPUT_EXCHANGE=q5_converted_amounts_exc
     - SEC_OUTPUT_SHARDS=3
     - MAIN_EOF_DEST=MAIN
@@ -1858,6 +1859,7 @@ services:
     - TARGET_CURRENCY=US Dollar
     - BATCH_SIZE=1000
     - SEC_BATCH_SIZE=5000
+    - ROUTING_FIELD=request_id
     volumes:
     - ./worker_logs:/worker_logs
   q5_money_converter_1:
@@ -1880,8 +1882,9 @@ services:
     - SECONDARY_INPUT_EXCHANGE=q5_currency_rates_from_api_exc
     - SHARD_ID=1
     - MAIN_N_UPSTREAM=3
-    - SECONDARY_N_UPSTREAM=1
-    - MAIN_OUTPUT_QUEUE=q5_reqs_currency_rates_api
+    - SECONDARY_N_UPSTREAM=3
+    - MAIN_OUTPUT_EXCHANGE=q5_reqs_currency_rates_api_exc
+    - MAIN_OUTPUT_SHARDS=3
     - SECONDARY_OUTPUT_EXCHANGE=q5_converted_amounts_exc
     - SEC_OUTPUT_SHARDS=3
     - MAIN_EOF_DEST=MAIN
@@ -1889,6 +1892,7 @@ services:
     - TARGET_CURRENCY=US Dollar
     - BATCH_SIZE=1000
     - SEC_BATCH_SIZE=5000
+    - ROUTING_FIELD=request_id
     volumes:
     - ./worker_logs:/worker_logs
   q5_money_converter_2:
@@ -1911,8 +1915,9 @@ services:
     - SECONDARY_INPUT_EXCHANGE=q5_currency_rates_from_api_exc
     - SHARD_ID=2
     - MAIN_N_UPSTREAM=3
-    - SECONDARY_N_UPSTREAM=1
-    - MAIN_OUTPUT_QUEUE=q5_reqs_currency_rates_api
+    - SECONDARY_N_UPSTREAM=3
+    - MAIN_OUTPUT_EXCHANGE=q5_reqs_currency_rates_api_exc
+    - MAIN_OUTPUT_SHARDS=3
     - SECONDARY_OUTPUT_EXCHANGE=q5_converted_amounts_exc
     - SEC_OUTPUT_SHARDS=3
     - MAIN_EOF_DEST=MAIN
@@ -1920,6 +1925,7 @@ services:
     - TARGET_CURRENCY=US Dollar
     - BATCH_SIZE=1000
     - SEC_BATCH_SIZE=5000
+    - ROUTING_FIELD=request_id
     volumes:
     - ./worker_logs:/worker_logs
   q5_money_converter_api_client_0:
@@ -1940,7 +1946,59 @@ services:
     - PYTHONUNBUFFERED=1
     - BATCH_SIZE=1
     - N_UPSTREAM=3
-    - INPUT_QUEUE=q5_reqs_currency_rates_api
+    - INPUT_EXCHANGE=q5_reqs_currency_rates_api_exc
+    - CONSUMER_GROUP=q5_money_converter_api_client
+    - SHARD_ID=0
+    - OUTPUT_EXCHANGE=q5_currency_rates_from_api_exc
+    - OUTPUT_SHARDS=3
+    volumes:
+    - ./worker_logs:/worker_logs
+  q5_money_converter_api_client_1:
+    build:
+      context: ./src
+      dockerfile: money_converter/Dockerfile
+    container_name: q5_money_converter_api_client_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
+    entrypoint:
+    - python3
+    - money_converter_api.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - BATCH_SIZE=1
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q5_reqs_currency_rates_api_exc
+    - CONSUMER_GROUP=q5_money_converter_api_client
+    - SHARD_ID=1
+    - OUTPUT_EXCHANGE=q5_currency_rates_from_api_exc
+    - OUTPUT_SHARDS=3
+    volumes:
+    - ./worker_logs:/worker_logs
+  q5_money_converter_api_client_2:
+    build:
+      context: ./src
+      dockerfile: money_converter/Dockerfile
+    container_name: q5_money_converter_api_client_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      worker_logs_cleaner:
+        condition: service_completed_successfully
+    entrypoint:
+    - python3
+    - money_converter_api.py
+    environment:
+    - MOM_HOST=rabbitmq
+    - PYTHONUNBUFFERED=1
+    - BATCH_SIZE=1
+    - N_UPSTREAM=3
+    - INPUT_EXCHANGE=q5_reqs_currency_rates_api_exc
+    - CONSUMER_GROUP=q5_money_converter_api_client
+    - SHARD_ID=2
     - OUTPUT_EXCHANGE=q5_currency_rates_from_api_exc
     - OUTPUT_SHARDS=3
     volumes:
