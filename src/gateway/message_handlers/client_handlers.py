@@ -102,7 +102,6 @@ def handle_client_request(
     client_socket.settimeout(client_data_rx_timeout)
 
     try:
-        client_socket.setblocking(True)
         while True:
             try:
                 msg_type, payload = message_protocol.external.recv_msg(client_socket)
@@ -261,17 +260,21 @@ def handle_client_request(
             raise TypeError(f"Unexpected message type: {msg_type}")
 
     except TimeoutError as e:
-        logging.info(f"Cliente {client_id} desconectado por timeout. Limpiando datos...")
-        serialized_message = handler.serialize_clean_client_data(client_id)
+        if client_id is not None:
+            logging.info(f"Cliente {client_id} desconectado por timeout. Limpiando datos...")
+            serialized_message = handler.serialize_clean_client_data(client_id)
 
-        # Send clean client to accounts input
-        accounts_output.send_eof_to_all(serialized_eof)
+            # Send clean client to accounts input
+            if accounts_output is not None:
+                accounts_output.send_eof_to_all(serialized_message)
 
-        # Send clean client to transactions input
-        if isinstance(output, ShardedExchangeProducer):
-            output.send_eof_to_all(serialized_message)
+            # Send clean client to transactions input
+            if isinstance(output, ShardedExchangeProducer):
+                output.send_eof_to_all(serialized_message)
+            else:
+                output.send(serialized_message)
         else:
-            output.send(serialized_message)
+            logging.info("Timeout esperando al cliente, pero no se había registrado ningún ID.")
 
     except Exception as e:
         error_name = type(e).__name__
