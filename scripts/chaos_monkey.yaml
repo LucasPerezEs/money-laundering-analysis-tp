@@ -35,11 +35,16 @@ allowed_patterns:
   # Splitters sin estado propio complejo.
   - "^q2_splitter_by_bank_"
   - "^q3_splitter_by_payment_method_"
+  - "^q4_splitters_by_origin_and_dest_inc_"
+  - "^q4_splitters_by_origin_and_dest_out_"
 
   # Double IO con persistencia propia.
   - "^q2_banks_name_adder_"
   - "^q3_avg_and_transactions_joiner_"
   - "^q5_money_converter_"
+
+  # API client stateless: los requests pendientes viven en MoneyConverter/Rabbit.
+  - "^q5_money_converter_api_client_"
 
   # Q4 graph nodes con estado persistido.
   - "^q4_inc_edges_filter_"
@@ -56,7 +61,6 @@ exclude_services:
 
 exclude_patterns:
   - "^client_"
-  - "^q5_money_converter_api_client_"
 
 # Pesos opcionales por servicio. Mayor peso => mas probabilidad de ser elegido.
 weights: {}
