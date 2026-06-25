@@ -5,7 +5,8 @@ import threading
 import queue
 import hashlib
 import random                         
-import os   
+import os
+import time
 
 from message_handlers import message_handler
 from common import middleware, message_protocol
@@ -70,6 +71,34 @@ def client_dispatcher(client_id, client_socket, outbox, ack_queue, send_lock, in
             logging.info(f"Error enviando al cliente {client_id}: {e}")
             break
     client_socket.close()
+
+def _send_clean_with_retry(producer, serialized_message, client_id, max_retries=3):
+    if producer is None:
+        return True
+
+    for attempt in range(max_retries):
+        try:
+            if isinstance(producer, ShardedExchangeProducer):
+                producer.send_eof_to_all(serialized_message)
+            else:
+                producer.send(serialized_message)
+            logging.info(f"Comando clean para cliente {client_id} enviado")
+            return True
+
+        except Exception as e:
+            if attempt < max_retries - 1:
+                sleep_time = 1.0 * (2 ** attempt)
+                logging.info(
+                    f"Fallo enviando comando clean para cliente {client_id}"
+                    f"Intento {attempt + 1}/{max_retries}. Reintentando en {sleep_time}s... Error: {e}"
+                )
+                time.sleep(sleep_time)
+            else:
+                logging.info(
+                    f"No se pudo enviar comando clean para cliente {client_id}"
+                    f"tras {max_retries} intentos. Error final: {e}"
+                )
+                return False
 
 def handle_client_request(
     client_socket,
@@ -259,37 +288,42 @@ def handle_client_request(
 
             raise TypeError(f"Unexpected message type: {msg_type}")
 
-    except TimeoutError as e:
-        if client_id is not None:
-            logging.info(f"Cliente {client_id} desconectado por timeout. Limpiando datos...")
-            serialized_message = handler.serialize_clean_client_data(client_id)
-
-            # Send clean client to accounts input
-            if accounts_output is not None:
-                accounts_output.send_eof_to_all(serialized_message)
-
-            # Send clean client to transactions input
-            if isinstance(output, ShardedExchangeProducer):
-                output.send_eof_to_all(serialized_message)
-            else:
-                output.send(serialized_message)
-        else:
-            logging.info("Timeout esperando al cliente, pero no se había registrado ningún ID.")
-
     except Exception as e:
         error_name = type(e).__name__
         if error_name == 'IncompleteReadError' and getattr(e, 'partial', None) == b'':
             logging.info(f"El cliente {client_id} cerró el socket tras finalizar.")
+        elif error_name == 'TimeoutError':
+            logging.warning(f"Timeout de inactividad alcanzado para el cliente {client_id}.")
         elif error_name in ('ConnectionResetError', 'ConnectionAbortedError', 'BrokenPipeError', 'OSError'):
             logging.info(f"Conexión finalizada con el cliente {client_id}.")
         else:
             logging.error(f"Handler error for client {client_id}: {e}")
             logging.error(traceback.format_exc())
+
+        if client_id is not None:
+            is_done = client_input_done_events.get(client_id)
+
+            if is_done is None or not is_done.is_set():
+                logging.info(f"Cliente {client_id} desconectado. Limpiando datos...")
+                serialized_message = handler.serialize_clean_client_data(client_id)
+
+                # Send clean client to accounts input
+                _send_clean_with_retry(accounts_output, serialized_message, client_id)
+
+                # Send clean client to transactions input
+                _send_clean_with_retry(output, serialized_message, client_id)
+        else:
+            logging.info(f"No pasó el tiempo suficiente como para que haya un ID")
+
         try:
             client_socket.close() 
         except:
             pass
     finally:
+        try:
+            client_socket.close() 
+        except Exception:
+            pass
         if output is not None:
             output.close()
         if accounts_output is not None:
